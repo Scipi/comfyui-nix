@@ -175,10 +175,15 @@
         url = "https://download.pytorch.org/whl/rocm7.1/torch-2.10.0%2Brocm7.1-cp312-cp312-manylinux_2_28_x86_64.whl";
         hash = "sha256-AI7g13u4tfn07h8AISAZxGGRcePEGV3lbyUzMbO8Mg0=";
       };
+      # torchvision = {
+      #   version = "0.25.0";
+      #   url = "https://download.pytorch.org/whl/rocm7.1/torchvision-0.25.0%2Brocm7.1-cp312-cp312-manylinux_2_28_x86_64.whl";
+      #   hash = "sha256-iuo929t0gB0zdFd6ELPwTUmJfCet0jXLJTE99uZbGSk=";
+      # };
       torchvision = {
-        version = "0.25.0";
-        url = "https://download.pytorch.org/whl/rocm7.1/torchvision-0.25.0%2Brocm7.1-cp312-cp312-manylinux_2_28_x86_64.whl";
-        hash = "sha256-iuo929t0gB0zdFd6ELPwTUmJfCet0jXLJTE99uZbGSk=";
+        version = "0.24.0";
+        url = "https://repo.radeon.com/rocm/manylinux/rocm-rel-7.1/torchvision-0.24.0%2Brocm7.1.0.gitb919bd0c-cp312-cp312-linux_x86_64.whl";
+        hash = "sha256-3lYijbLi0brRLVng8/LKruRZQT9qfUfKg5q0s7GqDig=";
       };
       torchaudio = {
         version = "2.10.0";
