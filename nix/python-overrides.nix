@@ -1187,8 +1187,7 @@ lib.optionalAttrs useCuda {
     '';
 
     doCheck = false;
-    # pythonImportsCheck = [ "facexlib" ];
-    pythonImportsCheck = [ ];
+    pythonImportsCheck = [ "facexlib" ];
   };
 }
 
