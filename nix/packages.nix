@@ -249,6 +249,7 @@ let
           ftfy # Text encoding fixes
           # PuLID dependencies
           onnxruntime # ONNX runtime
+          nh3
         ]
         ++ [ ps."color-matcher" ] # Color matching (hyphenated name needs quoting)
         # Common custom-node deps ("it just works" set)
