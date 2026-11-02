@@ -92,14 +92,14 @@
     # (issue #66), so prefer the platform wheels where they exist and keep the
     # any-wheel as the macOS fallback.
     comfyKitchen = {
-      version = "0.2.35";
+      version = "0.2.40";
       any = {
-        url = "https://files.pythonhosted.org/packages/14/60/8f075cceb07cb78d3792446b1156b7f5a41b260ac60645ef1483e34f71ce/comfy_kitchen-0.2.35-py3-none-any.whl";
-        hash = "sha256-+V1IY4rdGjbu0UA3ggwPhfDfdlMh7rU/B1C++JBqvL4=";
+        url = "https://files.pythonhosted.org/packages/9c/2e/1c6c621a1cd2ba89ae12fe99e095faa50986c0e6485461170732adfcfa6d/comfy_kitchen-0.2.40-py3-none-any.whl";
+        hash = "";
       };
       linuxX86_64 = {
-        url = "https://files.pythonhosted.org/packages/8b/c5/13b976741bc3b35f3a7fcded995c5a774dccfe69aee0e792a0381378777c/comfy_kitchen-0.2.35-cp312-abi3-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl";
-        hash = "sha256-nFnomBAdJlf5Z5EKz2q8b3ctdrlF2obF/aX32BfRzaE=";
+        url = "https://files.pythonhosted.org/packages/5d/40/1871ee8c58eeef8d15cbf49a461eba0775303f2d9eb34c11af7c29e455c1/comfy_kitchen-0.2.40-cp312-abi3-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl";
+        hash = "sha256-63JmZMdyGJ5uznQodkh/E0mWWAi4VHQnkOkAHbt8D50=";
       };
       linuxAarch64 = {
         url = "https://files.pythonhosted.org/packages/45/9f/0495991518293be6ed02839516ff5140f76dc414d007c78f5e9dcf393038/comfy_kitchen-0.2.35-cp312-abi3-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl";
