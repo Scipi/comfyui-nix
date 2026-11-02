@@ -182,6 +182,7 @@ rec {
       typer
       typing-extensions
       uv
+      nh3
     ];
   };
 
