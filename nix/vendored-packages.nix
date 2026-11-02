@@ -4,31 +4,7 @@
   versions,
 }:
 let
-  myPython = python.override {
-    packageOverrides = self: super: {
-      nh3 = super.nh3.overrideAttrs (oldAttrs: rec {
-        version = "0.3.7";
-        src = pkgs.fetchFromGitHub {
-          owner = "messense";
-          repo = "nh3";
-          tag = "v${version}";
-          hash = "sha256-2D8ZLmVRA+SuMqeUsSXyY+0zlgqp7TSRyQuJMjmRVFk=";
-        };
-        cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
-          inherit (oldAttrs) pname;
-          inherit version src;
-          hash = "sha256-dN6zdwMGh8stgDuGiO+T/ZZ3/3P9Wu/gUw5gHJ1pPGA=";
-        };
-        nativeBuildInputs = [
-          # self.pyprojectVersionPatchHook
-        ];
-        nativeCheckInputs = [
-          # self.pyprojectVersionPatchHook
-          # self.pytestCheckHook
-        ];
-      });
-    };
-  };
+  myPython = python;
   mkWheel =
     {
       pname,
