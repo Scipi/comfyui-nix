@@ -1,9 +1,9 @@
 {
   comfyui = {
-    version = "0.37.0";
-    releaseDate = "2026-09-21T07:35:01Z";
-    rev = "73c9bad4d21e7addbe1d13bc92eee0f1431b017d";
-    hash = "sha256-hfpoQsu8xzKHCy2Qqw2BMGsorwizJEuhKXWjUUJzTHs=";
+    version = "0.43.0";
+    releaseDate = "2026-10-26T07:35:01Z";
+    rev = "426f5eea52a7ece1dd599fff4cb6cd1f352ddd24";
+    hash = "sha256-3lv80HpyKFJHQTOaws1knIC7YdGkKm2S1WkVidUwMNI=";
   };
 
   vendored = {
