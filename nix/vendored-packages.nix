@@ -4,6 +4,23 @@
   versions,
 }:
 let
+  myPython = python.override {
+    packageOverrides = self: super: {
+      nh3 = super.nh3.overrideAttrs (finalAttrs: {
+        version = "0.3.7";
+        src = pkgs.fetchFromGitHub {
+          owner = "messense";
+          repo = "nh3";
+          tag = "v${finalAttrs.version}";
+          hash = "sha256-2D8ZLmVRA+SuMqeUsSXyY+0zlgqp7TSRyQuJMjmRVFk=";
+        };
+        cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
+          inherit (finalAttrs) pname version src;
+          hash = "sha256-dN6zdwMGh8stgDuGiO+T/ZZ3/3P9Wu/gUw5gHJ1pPGA=";
+        };
+      });
+    };
+  };
   mkWheel =
     {
       pname,
@@ -13,7 +30,7 @@ let
       propagatedBuildInputs ? [ ],
       pythonRelaxDeps ? [ ],
     }:
-    python.pkgs.buildPythonPackage {
+    myPython.pkgs.buildPythonPackage {
       inherit
         pname
         version
@@ -124,7 +141,7 @@ let
       url,
       hash,
     }:
-    python.pkgs.buildPythonPackage {
+   myPython.pkgs.buildPythonPackage {
       inherit pname version;
       format = "wheel";
       src = pkgs.fetchurl { inherit url hash; };
@@ -171,7 +188,7 @@ rec {
     version = versions.vendored.manager.version;
     url = versions.vendored.manager.url;
     hash = versions.vendored.manager.hash;
-    propagatedBuildInputs = with python.pkgs; [
+    propagatedBuildInputs = with myPython.pkgs; [
       chardet
       gitpython
       huggingface-hub
@@ -182,19 +199,7 @@ rec {
       typer
       typing-extensions
       uv
-      (nh3.overrideAttrs (finalAttrs: {
-        version = "0.3.7";
-        src = pkgs.fetchFromGitHub {
-          owner = "messense";
-          repo = "nh3";
-          tag = "v${finalAttrs.version}";
-          hash = "sha256-2D8ZLmVRA+SuMqeUsSXyY+0zlgqp7TSRyQuJMjmRVFk=";
-        };
-        cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
-          inherit (finalAttrs) pname version src;
-          hash = "sha256-dN6zdwMGh8stgDuGiO+T/ZZ3/3P9Wu/gUw5gHJ1pPGA=";
-        };
-      }))
+      nh3
     ];
   };
 
