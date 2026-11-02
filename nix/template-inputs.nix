@@ -6,4 +6,4 @@
 # These are input files (images, audio, etc.) referenced by workflow templates.
 # They are fetched at Nix build time for reproducible, pure builds.
 #
-{ pkgs }: {}
+{ pkgs }: ''
