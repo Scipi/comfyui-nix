@@ -86,7 +86,7 @@ let
   vendored = import ./vendored-packages.nix { inherit pkgs python versions; };
 
   # Template input files (images, audio, etc. for workflow templates)
-  templateInputs = import ./template-inputs.nix { inherit pkgs; };
+  # templateInputs = import ./template-inputs.nix { inherit pkgs; };
 
   # Bundled fonts for custom nodes that require font files
   # This provides a pure Nix solution for nodes like ComfyUI_Comfyroll_CustomNodes
@@ -475,18 +475,18 @@ let
 
             # Link template input files for workflow templates
             # These are pre-fetched at Nix build time for pure, reproducible builds
-            if [[ -d "${templateInputs}/input" ]]; then
-              for input_file in "${templateInputs}"/input/*; do
-                if [[ -e "$input_file" ]]; then
-                  filename=$(basename "$input_file")
-                  target="$BASE_DIR/input/$filename"
-                  # Only create symlink if file doesn't exist (don't overwrite user files)
-                  if [[ ! -e "$target" ]]; then
-                    ln -sf "$input_file" "$target"
-                  fi
-                fi
-              done
-            fi
+            # if [[ -d "${templateInputs}/input" ]]; then
+            #   for input_file in "${templateInputs}"/input/*; do
+            #     if [[ -e "$input_file" ]]; then
+            #       filename=$(basename "$input_file")
+            #       target="$BASE_DIR/input/$filename"
+            #       # Only create symlink if file doesn't exist (don't overwrite user files)
+            #       if [[ ! -e "$target" ]]; then
+            #         ln -sf "$input_file" "$target"
+            #       fi
+            #     fi
+            #   done
+            # fi
 
             # Create fonts directory with bundled fonts for custom nodes
             # This provides fonts for nodes like ComfyUI_Comfyroll_CustomNodes that expect
