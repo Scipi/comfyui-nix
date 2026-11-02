@@ -14,9 +14,9 @@
     };
 
     frontendPackage = {
-      version = "1.52.7";
-      url = "https://files.pythonhosted.org/packages/a8/1e/835f8b0396645a28266a87eeda6392f461a2ef87391cbf729ef9a7ae5d75/comfyui_frontend_package-1.52.7-py3-none-any.whl";
-      hash = "sha256-OqViT6UIX4Rh0xt+uIpC7Wmg54OjW+wcKjO5D8dmCVA=";
+      version = "1.58.4";
+      url = "https://files.pythonhosted.org/packages/f6/0b/01f33ce681479a2bb7ba83d37ce703ba1f5af2f8ac9f83374de0564b54ba/comfyui_frontend_package-1.58.4-py3-none-any.whl";
+      hash = "sha256-76HGQ+L8BEooqqmsv+DdGzSHOsi5cRJK1BTqJbWIu2g=";
     };
 
     workflowTemplates = {
