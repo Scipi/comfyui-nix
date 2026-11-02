@@ -19,9 +19,13 @@ let
           inherit version src;
           hash = "sha256-dN6zdwMGh8stgDuGiO+T/ZZ3/3P9Wu/gUw5gHJ1pPGA=";
         };
-        # nativeBuildInputs = [
-        #   self.pyprojectVersionPatchHook
-        # ];
+        nativeBuildInputs = [
+          self.pyprojectVersionPatchHook
+        ];
+        nativeCheckInputs = [
+          self.pyprojectVersionPatchHook
+          self.pytestCheckHook
+        ];
       });
     };
   };
