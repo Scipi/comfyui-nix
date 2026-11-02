@@ -1,16 +1,16 @@
 {
-  description = "A Nix flake for ComfyUI v0.14.2 with Python 3.12";
+  description = "A Nix flake for ComfyUI with Python 3.12";
 
   nixConfig = {
     extra-substituters = [
       "https://comfyui.cachix.org"
       "https://nix-community.cachix.org"
-      "https://cuda-maintainers.cachix.org" # Legacy, still works
+      "https://cache.nixos-cuda.org"
     ];
     extra-trusted-public-keys = [
       "comfyui.cachix.org-1:33mf9VzoIjzVbp0zwj+fT51HG0y31ZTK3nzYZAX0rec="
       "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs="
-      "cuda-maintainers.cachix.org-1:0dq3bujKpuEPMCX6U4WylrUDZ9JyUG0VpVZa7CNfq5E="
+      "cache.nixos-cuda.org:74DUi4Ye579gUqzH4ziL9IyiJBlDpMRn9MBN8oNan9M="
     ];
   };
 
@@ -29,13 +29,15 @@
       versions = import ./nix/versions.nix;
     in
     flake-parts.lib.mkFlake { inherit inputs; } {
-      # Supported systems: Linux (x86_64, aarch64), macOS (Intel, Apple Silicon)
+      # Supported systems: Linux (x86_64, aarch64), macOS (Apple Silicon)
       # Note: CUDA support is only available on x86_64-linux
       # Note: ROCm support is only available on x86_64-linux
+      # Note: x86_64-darwin is absent because nixpkgs 26.11 dropped Intel macOS;
+      # declaring it makes every output for that system fail to evaluate.
+      # https://nixos.org/manual/nixpkgs/unstable/release-notes#x86_64-darwin-26.11
       systems = [
         "x86_64-linux"
         "aarch64-linux"
-        "x86_64-darwin"
         "aarch64-darwin"
       ];
 
@@ -57,8 +59,8 @@
           # compiling from source. This provides:
           # - Fast builds (download ~2GB vs compile for hours)
           # - Low memory usage (no 30-60GB RAM requirement)
-          # - All GPU architectures supported (Pascal through Blackwell)
-          # - CUDA 12.8 runtime bundled in wheels
+          # - All supported GPU architectures included in one package
+          # - CUDA runtime included in the package
           # =======================================================================
 
           # =======================================================================
@@ -88,8 +90,6 @@
             config = {
               allowUnfree = true;
               allowBrokenPredicate = pkg: (pkg.pname or "") == "open-clip-torch";
-              # Work around nixpkgs kornia-rs badPlatforms issue on aarch64-linux
-              allowUnsupportedSystem = true;
             };
           };
 
@@ -131,12 +131,15 @@
           # Docker CUDA images use pre-built wheels (all architectures supported)
           linuxX86PackagesCuda = mkComfyPackages pkgsLinuxX86 { gpuSupport = "cuda"; };
           linuxX86PackagesRocm = mkComfyPackages pkgsLinuxX86 { gpuSupport = "rocm"; };
+          # Intel XPU (oneAPI / SYCL) — Linux x86_64 only
+          linuxX86PackagesXpu = mkComfyPackages pkgsLinuxX86 { gpuSupport = "xpu"; };
           linuxArm64Packages = mkComfyPackages pkgsLinuxArm64 { };
 
           nativePackages = mkComfyPackages pkgs { };
-          # CUDA uses pre-built wheels (supports all GPU architectures)
+          # CUDA uses pre-built wheels for all supported GPU architectures
           nativePackagesCuda = mkComfyPackages pkgs { gpuSupport = "cuda"; };
           nativePackagesRocm = mkComfyPackages pkgs { gpuSupport = "rocm"; };
+          nativePackagesXpu = mkComfyPackages pkgs { gpuSupport = "xpu"; };
 
           pythonEnv = mkPythonEnv pkgs;
 
@@ -176,7 +179,7 @@
             config = {
               allowUnfree = true;
               allowBrokenPredicate = pkg: (pkg.pname or "") == "open-clip-torch";
-              # aarch64-linux needs this workaround for kornia-rs
+              # Keep the x86_64-only ROCm development shell evaluable on aarch64-linux.
               allowUnsupportedSystem = system == "aarch64-linux";
             };
           };
@@ -189,17 +192,22 @@
             dockerImageLinux = linuxX86Packages.dockerImage;
             dockerImageLinuxCuda = linuxX86PackagesCuda.dockerImageCuda;
             dockerImageLinuxRocm = linuxX86PackagesRocm.dockerImageRocm;
+            dockerImageLinuxXpu = linuxX86PackagesXpu.dockerImageXpu;
             dockerImageLinuxArm64 = linuxArm64Packages.dockerImage;
           }
-          // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
+          // pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
             dockerImage = nativePackages.dockerImage;
           }
-          // pkgs.lib.optionalAttrs (pkgs.stdenv.isLinux && pkgs.stdenv.isx86_64) {
-            # CUDA package uses pre-built wheels (supports all GPU architectures)
+          // pkgs.lib.optionalAttrs (pkgs.stdenv.hostPlatform.isLinux && pkgs.stdenv.hostPlatform.isx86_64) {
+            # CUDA package uses pre-built wheels for all supported GPU architectures
             cuda = nativePackagesCuda.default;
             dockerImageCuda = nativePackagesCuda.dockerImageCuda;
             rocm = nativePackagesRocm.default;
             dockerImageRocm = nativePackagesRocm.dockerImageRocm;
+            # Intel XPU (oneAPI / SYCL) — pre-built wheels, Linux x86_64 only.
+            # Targets Arc A/B series and Core Ultra iGPUs (Meteor Lake+).
+            xpu = nativePackagesXpu.default;
+            dockerImageXpu = nativePackagesXpu.dockerImageXpu;
           };
 
           # Expose custom nodes for direct use
@@ -223,20 +231,21 @@
                     pkgs.libGL
                     pkgs.libGLU
                     pkgs.git
-                    pkgs.nixfmt-rfc-style
+                    pkgs.nixfmt
                     pkgs.ruff
                     pkgs.pyright
                     pkgs.shellcheck
                     pkgs.jq
                     pkgs.curl
+                    pkgs.python3Packages.pytest
 
                   ]
-                  ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [ pkgs.apple-sdk_14 ];
+                  ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ pkgs.apple-sdk_14 ];
 
                   shellHook =
                     let
                       defaultDir =
-                        if pkgs.stdenv.isDarwin then
+                        if pkgs.stdenv.hostPlatform.isDarwin then
                           "$HOME/Library/Application Support/comfy-ui"
                         else
                           "$HOME/.config/comfy-ui";
@@ -256,12 +265,50 @@
               rocm = buildShell nativePackagesRocm.pythonRuntime;
             };
 
-          formatter = pkgs.nixfmt-rfc-style;
+          # nixfmt >= 1.4.0 reads stdin when invoked bare, so binding the
+          # formatter to the raw package makes `nix fmt` a silent no-op. Wrap it
+          # in the same find-based invocation the `nixfmt` check uses so the two
+          # cannot drift apart again.
+          formatter = pkgs.writeShellApplication {
+            name = "nixfmt-tree";
+            runtimeInputs = [
+              pkgs.nixfmt
+              pkgs.findutils
+            ];
+            text = ''
+              # `nix fmt` forwards user flags alongside paths (e.g.
+              # `nix fmt -- --check .`). Split them so flags reach nixfmt and
+              # only paths reach find.
+              opts=()
+              paths=()
+              for arg in "$@"; do
+                case "$arg" in
+                  -*) opts+=("$arg") ;;
+                  *) paths+=("$arg") ;;
+                esac
+              done
+              if [ ''${#paths[@]} -eq 0 ]; then
+                paths=(.)
+              fi
+              find "''${paths[@]}" -name '*.nix' -type f \
+                -exec nixfmt ''${opts[@]+"''${opts[@]}"} {} +
+            '';
+          };
 
           checks = import ./nix/checks.nix {
-            inherit pkgs source;
+            inherit
+              nixpkgs
+              pkgs
+              source
+              ;
             packages = self'.packages;
             pythonRuntime = nativePackages.pythonRuntime;
+            # A function, not a fixed package set: the torch checks need the
+            # interpreter for a specific backend, and `pythonRuntime.pkgs` is
+            # the *unoverridden* nixpkgs set, so it cannot be used for that.
+            pythonFor = mkPython pkgs;
+            vendoredPackages = nativePackages.vendoredPackages;
+            nixosModule = self.nixosModules.default;
           };
         };
 
@@ -273,30 +320,41 @@
         };
 
         overlays.default = final: prev: {
-          comfyui-nix = self.legacyPackages.${final.system};
-          comfyui = self.packages.${final.system}.default;
-          comfy-ui = self.packages.${final.system}.default;
-          # CUDA variant (x86_64 Linux only) - uses pre-built wheels supporting all GPU architectures
+          comfyui-nix = self.legacyPackages.${final.stdenv.hostPlatform.system};
+          comfyui = self.packages.${final.stdenv.hostPlatform.system}.default;
+          comfy-ui = self.packages.${final.stdenv.hostPlatform.system}.default;
+          # CUDA variant (x86_64 Linux only) - uses pre-built wheels for all supported GPU architectures
           comfy-ui-cuda =
-            if final.stdenv.isLinux && final.stdenv.isx86_64 then
-              self.packages.${final.system}.cuda
+            if final.stdenv.hostPlatform.isLinux && final.stdenv.hostPlatform.isx86_64 then
+              self.packages.${final.stdenv.hostPlatform.system}.cuda
             else
               throw "comfy-ui-cuda is only available on x86_64 Linux";
           # ROCm variant (x86_64 Linux only) - uses pre-built wheels supporting all GPU architectures
           comfy-ui-rocm =
-            if final.stdenv.isLinux && final.stdenv.isx86_64 then
-              self.packages.${final.system}.rocm
+            if final.stdenv.hostPlatform.isLinux && final.stdenv.hostPlatform.isx86_64 then
+              self.packages.${final.stdenv.hostPlatform.system}.rocm
             else
               throw "comfy-ui-rocm is only available on x86_64 Linux";
+          # Intel XPU variant (x86_64 Linux only) - pre-built wheels from pytorch.org/whl/xpu
+          comfy-ui-xpu =
+            if final.stdenv.hostPlatform.isLinux && final.stdenv.hostPlatform.isx86_64 then
+              self.packages.${final.stdenv.hostPlatform.system}.xpu
+            else
+              throw "comfy-ui-xpu is only available on x86_64 Linux";
           # Add custom nodes to overlay
-          comfyui-custom-nodes = self.legacyPackages.${final.system}.customNodes;
+          comfyui-custom-nodes = self.legacyPackages.${final.stdenv.hostPlatform.system}.customNodes;
         };
 
+        # The module deliberately does not touch `nixpkgs.overlays`: defining that
+        # option from a module is incompatible with `nixpkgs.nixosModules.readOnlyPkgs`
+        # (issue #101). The packages are handed to the module directly instead, so
+        # importing it is enough - add `overlays.default` yourself only if you want
+        # `pkgs.comfy-ui*` available elsewhere in your configuration.
         nixosModules.default =
-          { ... }:
+          { pkgs, ... }:
           {
             imports = [ ./nix/modules/comfyui.nix ];
-            nixpkgs.overlays = [ self.overlays.default ];
+            services.comfyui.packageSet = self.packages.${pkgs.stdenv.hostPlatform.system};
           };
       };
     };

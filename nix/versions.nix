@@ -1,96 +1,145 @@
 {
   comfyui = {
-    version = "0.14.2";
-    releaseDate = "2026-02-18T06:12:02Z";
-    rev = "185c61dc26cdc631a1fd57b53744b67393a97fc6";
-    hash = "sha256-rrkVEnoWp0BBFZS4fMHo72aYZSxy0I3O8C9DMKXsr88=";
+    version = "0.37.0";
+    releaseDate = "2026-09-21T07:35:01Z";
+    rev = "73c9bad4d21e7addbe1d13bc92eee0f1431b017d";
+    hash = "sha256-hfpoQsu8xzKHCy2Qqw2BMGsorwizJEuhKXWjUUJzTHs=";
   };
 
   vendored = {
     spandrel = {
-      version = "0.4.1";
-      url = "https://files.pythonhosted.org/packages/d3/1e/5dce7f0d3eb2aa418bd9cf3e84b2f5d2cf45b1c62488dd139fc93c729cfe/spandrel-0.4.1-py3-none-any.whl";
-      hash = "sha256-SaOaqXl2l0mkIgNCg1W8SEBFKFTWM0zg1GWvRgmN1Eg=";
+      version = "0.4.2";
+      url = "https://files.pythonhosted.org/packages/74/31/411ea965835534c43d4b98d451968354876e0e867ea1fd42669e4cca0732/spandrel-0.4.2-py3-none-any.whl";
+      hash = "sha256-bJPj7L6w5Uj9LfRaYFRys0wWFCh8VrUbszze965SNbU=";
     };
 
     frontendPackage = {
-      version = "1.38.14";
-      url = "https://files.pythonhosted.org/packages/24/26/d7b2f6442d9252bc760379a87aeeeaa6b7e21750b0283301399776f115d9/comfyui_frontend_package-1.38.14-py3-none-any.whl";
-      hash = "sha256-Mg94aaKJuKNKY23DguF3EcvIQgYhW5aPxii4Pn5Z1To=";
+      version = "1.52.7";
+      url = "https://files.pythonhosted.org/packages/a8/1e/835f8b0396645a28266a87eeda6392f461a2ef87391cbf729ef9a7ae5d75/comfyui_frontend_package-1.52.7-py3-none-any.whl";
+      hash = "sha256-OqViT6UIX4Rh0xt+uIpC7Wmg54OjW+wcKjO5D8dmCVA=";
     };
 
     workflowTemplates = {
-      version = "0.8.43";
-      url = "https://files.pythonhosted.org/packages/3a/a7/c15e6a7aa40f6716d8d5db4d680c07525ae1cc72867d0d6af9836df12b72/comfyui_workflow_templates-0.8.43-py3-none-any.whl";
-      hash = "sha256-JMowTkEs8SXmBw813VdsXKRB3DvNTYzN0DuY2HRYgnE=";
+      version = "0.11.66";
+      url = "https://files.pythonhosted.org/packages/f3/40/437f91c26e198dfc4bcad70efec1a91d79068dd78ed76fc57130c08b650d/comfyui_workflow_templates-0.11.66-py3-none-any.whl";
+      hash = "sha256-KvmT6Eu1qJ5muoRpdUDPIVCTAjxKDABP9Mwr4CN6GY4=";
     };
 
     workflowTemplatesCore = {
-      version = "0.3.147";
-      url = "https://files.pythonhosted.org/packages/b2/87/0635b9dddf6963a90c7a08f6f55235a872ac53d6fbf6a56fe847678ca583/comfyui_workflow_templates_core-0.3.147-py3-none-any.whl";
-      hash = "sha256-3c1aCGnaPE+Q+bE/6HWBJS3Lzf90KNGPHp20c4oX1po=";
+      version = "0.3.357";
+      url = "https://files.pythonhosted.org/packages/b7/eb/e6236ad859a7db133e02d51f79711626f88863b6f165cba77f3a6b5afa48/comfyui_workflow_templates_core-0.3.357-py3-none-any.whl";
+      hash = "sha256-+o2u8mZaHYWUvvU6WP+8R6B4j8O72LaLSmrWxisbQDM=";
+    };
+
+    workflowTemplatesJson = {
+      version = "0.1.92";
+      url = "https://files.pythonhosted.org/packages/c7/c6/9fa43666d27e4a33243cd24721e94bf978649a7ea7d8d0b9eb498cc0da3e/comfyui_workflow_templates_json-0.1.92-py3-none-any.whl";
+      hash = "sha256-aA3ZBSX67rQdvNZyTGAGUT1ge3w6QYqxc/qFDIPckbE=";
     };
 
     workflowTemplatesMediaApi = {
-      version = "0.3.54";
-      url = "https://files.pythonhosted.org/packages/8e/f1/162f2730e73169421c3804d39ee786d2de2e9bcb8a8e619c253f7cdd32ce/comfyui_workflow_templates_media_api-0.3.54-py3-none-any.whl";
-      hash = "sha256-L0YUSw1exVBTZ1dfSisbpJFaO+Y+2bVwb6N97b7U9GM=";
+      version = "0.3.84";
+      url = "https://files.pythonhosted.org/packages/35/47/e4c723615b396f75893049af38a4b53bcb0e8944418819bb0e0d72f342e8/comfyui_workflow_templates_media_api-0.3.84-py3-none-any.whl";
+      hash = "sha256-wtalmZrDnk839HriMcklV97+Wt2yzGq1wRQQtNWikQo=";
     };
 
     workflowTemplatesMediaVideo = {
-      version = "0.3.49";
-      url = "https://files.pythonhosted.org/packages/1b/41/678f247f8007f40b92e8ff42bf1152c6b21937b6fad7d1fd3ef6e562fab3/comfyui_workflow_templates_media_video-0.3.49-py3-none-any.whl";
-      hash = "sha256-xdfaYyyeOAqCdh4UIZ4iZiH3JmL3SQIHpYuXdDx2G3Y=";
+      version = "0.3.101";
+      url = "https://files.pythonhosted.org/packages/e5/9e/49e1fbe9f05df7e4410a8d485af2a2d6fe80b247d44b3bfa7166c54012ef/comfyui_workflow_templates_media_video-0.3.101-py3-none-any.whl";
+      hash = "sha256-YnD9YcjDkxtvADGrrH1MkM7WJN5seRi/+FuJ5sPXSTw=";
     };
 
     workflowTemplatesMediaImage = {
-      version = "0.3.90";
-      url = "https://files.pythonhosted.org/packages/de/76/53c62e0627f13865386ad31fcb3cfbc80169e6e3e4ea8c65bf5fb11b6fde/comfyui_workflow_templates_media_image-0.3.90-py3-none-any.whl";
-      hash = "sha256-77cBHBqA8jLfoVF46phLFDhDqk+pRl6ihA3O86endZ0=";
+      version = "0.3.160";
+      url = "https://files.pythonhosted.org/packages/bd/2e/aa57dc75cc2a73921d8472a398678e1ac40c011756ad0ab2dfe41eb0ba15/comfyui_workflow_templates_media_image-0.3.160-py3-none-any.whl";
+      hash = "sha256-1KXFVBxwiPatscfaQfXXwcFKA37aamHNi0t2wlH6qpM=";
     };
 
     workflowTemplatesMediaOther = {
-      version = "0.3.123";
-      url = "https://files.pythonhosted.org/packages/35/4c/89c0a06310816d5dae1026a6a7016125f27c126dc245af2372c31b1bc6d0/comfyui_workflow_templates_media_other-0.3.123-py3-none-any.whl";
-      hash = "sha256-0KrByksldVxXYUwqE2YH5d3S/rpSZAGKz833U2DU5mM=";
+      version = "0.3.229";
+      url = "https://files.pythonhosted.org/packages/a7/46/feed5492a2def46fee71a52fcbb3b7443a048e402c40bedfaaebcc6fa234/comfyui_workflow_templates_media_other-0.3.229-py3-none-any.whl";
+      hash = "sha256-zj2Y+p2EuRTDNf5cm8kDz+++GTKxvDy2uu9/NxtL1DU=";
+    };
+
+    workflowTemplatesMediaAssets01 = {
+      version = "0.1.47";
+      url = "https://files.pythonhosted.org/packages/b2/a5/d091abf1e0e0c81debc29337be3308d3bbbaf477ef223aeee9e46454c264/comfyui_workflow_templates_media_assets_01-0.1.47-py3-none-any.whl";
+      hash = "sha256-ga/4qp+RHYbYuors2MDVgNZoCf9C5KUdaAqQj6/tiD0=";
+    };
+
+    workflowTemplatesMediaAssets02 = {
+      version = "0.1.3";
+      url = "https://files.pythonhosted.org/packages/cf/8e/17af57c9e3cb120e43fc19dff9a34b357c8ae6eb23e08785d7d697afc9d3/comfyui_workflow_templates_media_assets_02-0.1.3-py3-none-any.whl";
+      hash = "sha256-hZLANvYLTxgHXxdz2+PTkc/JZ/fc97QUPsRvyS6wr3o=";
     };
 
     embeddedDocs = {
-      version = "0.4.1";
-      url = "https://files.pythonhosted.org/packages/2b/c1/6fd983ff14ac93d3ae31ef48b23d6a63b09f2b595279258105b821083247/comfyui_embedded_docs-0.4.1-py3-none-any.whl";
-      hash = "sha256-t2rdrw66DR3OZWV4bIgIcDxjWQskIUu/ZwwsDkzvxgU=";
+      version = "0.5.12";
+      url = "https://files.pythonhosted.org/packages/ba/13/b57fb0de3eb1bcef0b6e26444ab357a8d6a18d859d58245c4a6307ca82e3/comfyui_embedded_docs-0.5.12-py3-none-any.whl";
+      hash = "sha256-kEKdjRfqXYX53gC8wlzU4rxhSqPWwDzOvzKuxlsQeoA=";
     };
 
     manager = {
-      version = "4.0.5";
-      url = "https://files.pythonhosted.org/packages/e3/e2/9ff20f1f14462ed8c13612a26d274ae4adf916ad495292d50319ad46a619/comfyui_manager-4.0.5-py3-none-any.whl";
-      hash = "sha256-mh4ZGoFzWQemx0WItAu2KhFZPrBoXTwZQICAQBfoi00=";
+      version = "4.2.2";
+      url = "https://files.pythonhosted.org/packages/2c/21/ff7464c4ea1bc53741280d2b26046c2c9e8ba742e096a971aff2f83da1bb/comfyui_manager-4.2.2-py3-none-any.whl";
+      hash = "sha256-mwMx5bhEg7QGJgSAuSrZHb2Ec8rm4iYhJ+jBFXfOBHM=";
     };
 
-    # New ComfyUI core deps (not in nixpkgs)
+    # New ComfyUI core deps (not in nixpkgs).
+    # comfy-kitchen and comfy-aimdo ship platform wheels with native libraries
+    # (kitchen: backends/cuda/_C.abi3.so, aimdo: aimdo.so/aimdo_rocm.so). The
+    # py3-none-any wheels are pure-Python and silently disable those features
+    # (issue #66), so prefer the platform wheels where they exist and keep the
+    # any-wheel as the macOS fallback.
     comfyKitchen = {
-      version = "0.2.7";
-      url = "https://files.pythonhosted.org/packages/f8/65/d483613734d0b9753bd9bfa297ff334cb2c7766e82306099db6b259b4e2c/comfy_kitchen-0.2.7-py3-none-any.whl";
-      hash = "sha256-+PqlebadMx0vHqwJ6WqVWGwqa5WKVLwZ5/HBp3hS3TY=";
+      version = "0.2.35";
+      any = {
+        url = "https://files.pythonhosted.org/packages/14/60/8f075cceb07cb78d3792446b1156b7f5a41b260ac60645ef1483e34f71ce/comfy_kitchen-0.2.35-py3-none-any.whl";
+        hash = "sha256-+V1IY4rdGjbu0UA3ggwPhfDfdlMh7rU/B1C++JBqvL4=";
+      };
+      linuxX86_64 = {
+        url = "https://files.pythonhosted.org/packages/8b/c5/13b976741bc3b35f3a7fcded995c5a774dccfe69aee0e792a0381378777c/comfy_kitchen-0.2.35-cp312-abi3-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl";
+        hash = "sha256-nFnomBAdJlf5Z5EKz2q8b3ctdrlF2obF/aX32BfRzaE=";
+      };
+      linuxAarch64 = {
+        url = "https://files.pythonhosted.org/packages/45/9f/0495991518293be6ed02839516ff5140f76dc414d007c78f5e9dcf393038/comfy_kitchen-0.2.35-cp312-abi3-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl";
+        hash = "sha256-M1ZjMeI6ppeEuzcw4hgkHv3KlBCTfwofUecSgYCI7AU=";
+      };
+    };
+
+    # ANGLE libraries for the GLSL shader nodes (comfy_extras/nodes_glsl.py).
+    # Replaces glfw as of ComfyUI v0.28. Platform-specific wheels containing
+    # native libEGL/libGLESv2 (no wheel exists for x86_64-darwin).
+    comfyAngle = {
+      version = "0.1.1";
+      linuxX86_64 = {
+        url = "https://files.pythonhosted.org/packages/af/f4/5ddd0416e9619233b20e2a34c47d2359d4ac6b17a17f8bf59e0bfe5b93c3/comfy_angle-0.1.1-py3-none-manylinux_2_28_x86_64.whl";
+        hash = "sha256-PS/KuThuu7VlPWZpb6i8rTKcHRhS6kth8obqmUhahAo=";
+      };
+      linuxAarch64 = {
+        url = "https://files.pythonhosted.org/packages/48/be/a4df53ed0cd450b3f892b4f746a048b3b2bd9b1eb97816538ea69c06abd1/comfy_angle-0.1.1-py3-none-manylinux_2_28_aarch64.whl";
+        hash = "sha256-ZrfIkJ+YMnk1cDfvD2mU+n4wOkHYp3oKB1pjek6z/m4=";
+      };
+      darwinArm64 = {
+        url = "https://files.pythonhosted.org/packages/9f/0d/44c35dbe55cacd4b7683d83ab00aacc2c136268e2545a425a8af4c2c8b0e/comfy_angle-0.1.1-py3-none-macosx_11_0_arm64.whl";
+        hash = "sha256-wK8X4XBwz3r129ZsUaG2zKKCDIYR5IfnvTmABqFEcSQ=";
+      };
     };
 
     comfyAimdo = {
-      version = "0.1.8";
-      url = "https://files.pythonhosted.org/packages/06/59/47e8f1a513d5e4c041edf8afb164e7fbd42635e78974cbfd609fcda3506e/comfy_aimdo-0.1.8-py3-none-any.whl";
-      hash = "sha256-BVs3sDetESkbqH2knvJ4weuw4ix0IRH6+a4xWzru3Zk=";
-    };
-
-    # UI deps some custom nodes expect
-    gradioClient = {
-      version = "1.13.3";
-      url = "https://files.pythonhosted.org/packages/6e/0b/337b74504681b5dde39f20d803bb09757f9973ecdc65fd4e819d4b11faf7/gradio_client-1.13.3-py3-none-any.whl";
-      hash = "sha256-P2Pk0zoomcGhKxD+PPd7gqaRn/Gh+2OR9qoiWBGqOQw=";
-    };
-
-    gradio = {
-      version = "5.49.1";
-      url = "https://files.pythonhosted.org/packages/8d/95/1c25fbcabfa201ab79b016c8716a4ac0f846121d4bbfd2136ffb6d87f31e/gradio-5.49.1-py3-none-any.whl";
-      hash = "sha256-Gxk2k4eAGiamun/S901GxbDirJ3e8U8k3cDRH7GUIbc=";
+      version = "0.5.5";
+      any = {
+        url = "https://files.pythonhosted.org/packages/be/52/3ae1892775f0138af1c0cc27341cf073e0890731f0c68848e8831738f9c2/comfy_aimdo-0.5.5-py3-none-any.whl";
+        hash = "sha256-IItDeaCA1qeNtJ5iNnUWQrjp4JjuJwsDWhdA7CGDn70=";
+      };
+      linuxX86_64 = {
+        url = "https://files.pythonhosted.org/packages/5d/18/807dd84d80469c9620928429911b9ff04c699e8b47204423a8804ac3f09d/comfy_aimdo-0.5.5-cp39-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl";
+        hash = "sha256-ek3HaDEnOi+Df2fPScnlB+d4sZr/F+bvijSm6WlP2Go=";
+      };
+      linuxAarch64 = {
+        url = "https://files.pythonhosted.org/packages/8c/53/751aae9e7635b3921647579fdca2d7f29c5bc3e8081743fef9dea1fdf36d/comfy_aimdo-0.5.5-cp39-abi3-manylinux2014_aarch64.manylinux_2_17_aarch64.whl";
+        hash = "sha256-IrZkGfnxiH/Z+0nw5f+aiLeow49rlHKeXC6L+Tb/LXA=";
+      };
     };
 
     # Optional attention optimization (used by --use-sage-attention)
@@ -150,22 +199,22 @@
         hash = "sha256-8cv9/Ru9++conUenTzb/bF2HwyBWBiAv71p/tpP2HPA=";
       };
     };
-    # Linux x86_64 CUDA 12.8
-    cu128 = {
+    # Linux x86_64 CUDA 13.0
+    cu130 = {
       torch = {
         version = "2.10.0";
-        url = "https://download.pytorch.org/whl/cu128/torch-2.10.0%2Bcu128-cp312-cp312-manylinux_2_28_x86_64.whl";
-        hash = "sha256-Yo6JvVEQztfevuKlfGmVlyW3+8ZOq4GjndcORsfii6U=";
+        url = "https://download.pytorch.org/whl/cu130/torch-2.10.0%2Bcu130-cp312-cp312-manylinux_2_28_x86_64.whl";
+        hash = "sha256-hY8MvMeNcm/qlJnrNGT6qYOS+gk4RaMmIgm9Imt4RNY=";
       };
       torchvision = {
         version = "0.25.0";
-        url = "https://download.pytorch.org/whl/cu128/torchvision-0.25.0%2Bcu128-cp312-cp312-manylinux_2_28_x86_64.whl";
-        hash = "sha256-ElWgyiv5h6z58QO5bFxM/jQV/Eoe7xf6CK9SegSk9XM=";
+        url = "https://download.pytorch.org/whl/cu130/torchvision-0.25.0%2Bcu130-cp312-cp312-manylinux_2_28_x86_64.whl";
+        hash = "sha256-wvXjjwzVeieW5FA8DxM2XeugHbwWfvgg8L7sfKlvXy4=";
       };
       torchaudio = {
         version = "2.10.0";
-        url = "https://download.pytorch.org/whl/cu128/torchaudio-2.10.0%2Bcu128-cp312-cp312-manylinux_2_28_x86_64.whl";
-        hash = "sha256-0muRoXPO5tuav/aLSNZCNpUP/FYo0GRI7N16xWhB4Qo=";
+        url = "https://download.pytorch.org/whl/cu130/torchaudio-2.10.0%2Bcu130-cp312-cp312-manylinux_2_28_x86_64.whl";
+        hash = "sha256-7Vc+cxm6mm4Te0iV7d9Mn81CS7ThCmKSZ9ZLVazFf7s=";
       };
     };
     # Linux x86_64 ROCm 7.1
@@ -191,6 +240,149 @@
         hash = "sha256-pUuMH2HeAbGrlGWJqgFYId0RCTVEcCJJ0gq6VpE8aLs=";
       };
     };
+    # Linux x86_64 Intel XPU (oneAPI / SYCL)
+    # In-tree PyTorch XPU — no IPEX needed. Targets Arc A/B series and
+    # Core Ultra (Meteor Lake+) iGPUs. Older Xe-LP iGPUs (UHD 770) are
+    # not officially supported by Intel/PyTorch — untested here.
+    #
+    # The XPU torch wheel does NOT bundle its Intel runtime libs the way CUDA
+    # and ROCm wheels do. Instead it declares ~20 Intel runtime wheel deps in
+    # Requires-Dist. All are pinned in `xpuRuntime` below and wired up as
+    # propagatedBuildInputs of torch in python-overrides.nix.
+    xpu = {
+      torch = {
+        version = "2.10.0";
+        url = "https://download.pytorch.org/whl/xpu/torch-2.10.0%2Bxpu-cp312-cp312-linux_x86_64.whl";
+        hash = "sha256-tHNXHUeJEvkogcwT8V+hj4Rj+w+4oGjJbtR6fUWk2go=";
+      };
+      torchvision = {
+        version = "0.25.0";
+        url = "https://download.pytorch.org/whl/xpu/torchvision-0.25.0%2Bxpu-cp312-cp312-manylinux_2_28_x86_64.whl";
+        hash = "sha256-atJUNJa8KeWdPdYUqU0JqphwMYrttmBFNE//3f7dLPg=";
+      };
+      torchaudio = {
+        version = "2.10.0";
+        url = "https://download.pytorch.org/whl/xpu/torchaudio-2.10.0%2Bxpu-cp312-cp312-manylinux_2_28_x86_64.whl";
+        hash = "sha256-oD/un3Hi9OZC/P8vaokN6kYwm7cGrahDr40K5CBa4p8=";
+      };
+    };
+  };
+
+  # Intel XPU runtime wheel pins (declared as Requires-Dist by torch-2.10.0+xpu).
+  # These are PyPI-hosted wheels from Intel except triton-xpu which lives on
+  # download.pytorch.org. All are py2.py3-none-manylinux_2_28_x86_64 binary
+  # distributions containing .so files and Python shims.
+  xpuRuntime = {
+    intel-cmplr-lib-rt = {
+      version = "2025.3.1";
+      url = "https://files.pythonhosted.org/packages/3d/66/26dfd6a19f7faf595da12c21bdb4102c6f30755511c7f167f745b203fbb7/intel_cmplr_lib_rt-2025.3.1-py2.py3-none-manylinux_2_28_x86_64.whl";
+      hash = "sha256-V/ZXqklEJyPlkQL7nj9etweZ2TceynqyrUb0T6zyEM8=";
+    };
+    intel-cmplr-lib-ur = {
+      version = "2025.3.1";
+      url = "https://files.pythonhosted.org/packages/70/9a/a338de7fc24087c40d38401372618c8465103795baefe941eea3acf55678/intel_cmplr_lib_ur-2025.3.1-py2.py3-none-manylinux_2_28_x86_64.whl";
+      hash = "sha256-FzDM4MZVkdFX1foazchEep7UGbUn6lLmbbCBWg+15EQ=";
+    };
+    intel-cmplr-lic-rt = {
+      version = "2025.3.1";
+      url = "https://files.pythonhosted.org/packages/a7/3b/30ce9123fd5368ac4f9abceca8cd7ee2f495c3e2b6f1b244285737210a8d/intel_cmplr_lic_rt-2025.3.1-py2.py3-none-manylinux_2_28_x86_64.whl";
+      hash = "sha256-rWUcJpBpK/jJQO5lomuwY9BpWafirSdyL27bvx9TykY=";
+    };
+    intel-sycl-rt = {
+      version = "2025.3.1";
+      url = "https://files.pythonhosted.org/packages/76/74/27684e2d0d32923da293f22b418c0c13919839444b67e86a8986f44938e7/intel_sycl_rt-2025.3.1-py2.py3-none-manylinux_2_28_x86_64.whl";
+      hash = "sha256-KW2UWY4VC/bqTFqPFQX5jopIO/OLaTW43a1vcrHSW58=";
+    };
+    oneccl-devel = {
+      version = "2021.17.1";
+      url = "https://files.pythonhosted.org/packages/6f/69/761af812bbccc4decd4f5b7492aa533654773ae9dfc3487edec44a4d8126/oneccl_devel-2021.17.1-py2.py3-none-manylinux_2_28_x86_64.whl";
+      hash = "sha256-w/dDjxK5dj3SvLPOT0iyRieIU0lHVFpoEX9QO5qwHSo=";
+    };
+    oneccl = {
+      version = "2021.17.1";
+      url = "https://files.pythonhosted.org/packages/3d/69/8050e96e5b099b349d9109f727ce39b4f57414a24d3eb71a12fdc48bad87/oneccl-2021.17.1-py2.py3-none-manylinux_2_28_x86_64.whl";
+      hash = "sha256-x3sWoWhtJS7OffMx2o5P7rN3bEC90DqPjplCrTeNj/g=";
+    };
+    impi-rt = {
+      version = "2021.17.0";
+      url = "https://files.pythonhosted.org/packages/26/f9/4d676df06d5069144d1533a52860401ae9204cfe84ab69dc59a595233464/impi_rt-2021.17.0-py2.py3-none-manylinux_2_28_x86_64.whl";
+      hash = "sha256-e2XFpenfii/gzJjuWkTqThj5Dn0RhHq2ufmw31nB0Do=";
+    };
+    onemkl-license = {
+      version = "2025.3.0";
+      url = "https://files.pythonhosted.org/packages/88/11/b43e8cde058c368ce7f8f9b1ca9f812f7397e4309148da7d24cb6b81b513/onemkl_license-2025.3.0-py2.py3-none-manylinux_2_28_x86_64.whl";
+      hash = "sha256-qBCyW7JKkNtEktgccc3hMYPYlRziaWDW3FbU9OPclf8=";
+    };
+    onemkl-sycl-blas = {
+      version = "2025.3.0";
+      url = "https://files.pythonhosted.org/packages/1e/07/df0cd5b0ec5f0a0bcbc8e73e4b2cfca78449b3b521868b1e366bfe6f97a3/onemkl_sycl_blas-2025.3.0-py2.py3-none-manylinux_2_28_x86_64.whl";
+      hash = "sha256-57tfKK/ARfy72JiRT0d9fnU17J+0W7lG7Z+Be9HvH1s=";
+    };
+    onemkl-sycl-dft = {
+      version = "2025.3.0";
+      url = "https://files.pythonhosted.org/packages/7c/b8/1ec88922a9a479f567183cf82d49041451bcb7afbb3195202d9a57e5a0ff/onemkl_sycl_dft-2025.3.0-py2.py3-none-manylinux_2_28_x86_64.whl";
+      hash = "sha256-OuI/OCDwZRyLQ8/2Rt3STawpOCr2yyS/RtXIpHLIuJk=";
+    };
+    onemkl-sycl-lapack = {
+      version = "2025.3.0";
+      url = "https://files.pythonhosted.org/packages/78/c4/c2cf3e1990707f7f1918f1073e3a26c56e92f06c1525af39501b271ede23/onemkl_sycl_lapack-2025.3.0-py2.py3-none-manylinux_2_28_x86_64.whl";
+      hash = "sha256-0qTXuia5CrM6L2TtbJXFlshyHuJRmD6vmkyYVtHjTHs=";
+    };
+    onemkl-sycl-rng = {
+      version = "2025.3.0";
+      url = "https://files.pythonhosted.org/packages/94/6a/3fc34f47c69bdfbfce1f6d02f18e0fd41459bb4e1204e2a5cae179c0986e/onemkl_sycl_rng-2025.3.0-py2.py3-none-manylinux_2_28_x86_64.whl";
+      hash = "sha256-5EBkG3waAhxJdblbmYKLgBVQSNiQ6/0k80Bg/qpbM3U=";
+    };
+    onemkl-sycl-sparse = {
+      version = "2025.3.0";
+      url = "https://files.pythonhosted.org/packages/a9/5f/4f0b81e5f83f5e42c549bd29a9398b507890ec24080d27cd7afada61521e/onemkl_sycl_sparse-2025.3.0-py2.py3-none-manylinux_2_28_x86_64.whl";
+      hash = "sha256-kwzS0UquWhv+wH+hC4F8REeDRTqhplVA3kbgy/nQDeY=";
+    };
+    dpcpp-cpp-rt = {
+      version = "2025.3.1";
+      url = "https://files.pythonhosted.org/packages/9a/1f/ff1b20fe45c1a2077f1a11e2447826881987a76983facab763a72ee29fc8/dpcpp_cpp_rt-2025.3.1-py2.py3-none-manylinux_2_28_x86_64.whl";
+      hash = "sha256-ZWTxncV0XAC0nqdJUt8TwmxOI6ogtykpKKMNdeOE+YY=";
+    };
+    intel-opencl-rt = {
+      version = "2025.3.1";
+      url = "https://files.pythonhosted.org/packages/8b/de/6a4fa1e6e1ff1441a4197f08c92798367074f98e4f43ce0d94f36913ae90/intel_opencl_rt-2025.3.1-py2.py3-none-manylinux_2_28_x86_64.whl";
+      hash = "sha256-9Ux5f9g5ueXkQciU6rDhrcg5SgazxN84BFItYAWmYdk=";
+    };
+    mkl = {
+      version = "2025.3.0";
+      url = "https://files.pythonhosted.org/packages/6d/b4/ef531295ed33b929c6c5214421eeebe370f1be22536b6956b4aaf18fdbc5/mkl-2025.3.0-py2.py3-none-manylinux_2_28_x86_64.whl";
+      hash = "sha256-e4H10uA0Y3sYfKWGZoeMToiJmIp4454LbukuhGVo9mA=";
+    };
+    intel-openmp = {
+      version = "2025.3.1";
+      url = "https://files.pythonhosted.org/packages/da/ad/72e2fb7e30f5fd2b7650b721c5979cf2a614538fd99afb45672b31157fb9/intel_openmp-2025.3.1-py2.py3-none-manylinux_2_28_x86_64.whl";
+      hash = "sha256-LDVB6idfDoQXJDYSoWtvH00Vwen8yWZn2wgk0HNfFBM=";
+    };
+    tbb = {
+      version = "2022.3.0";
+      url = "https://files.pythonhosted.org/packages/e3/9e/b7f1f7af53580e4e8cf39cf51b14c8e295d767b3ae9d78b5007d6058cfc8/tbb-2022.3.0-py2.py3-none-manylinux_2_28_x86_64.whl";
+      hash = "sha256-p+Eiy5im+II5QDQaoyPc3/+nfjZxKiKhrjp2Qw+p9BI=";
+    };
+    tcmlib = {
+      version = "1.4.1";
+      url = "https://files.pythonhosted.org/packages/a1/a4/38e8b5a27b66ab286168ba6c449771ed71d71ec76524e7f12401474a5151/tcmlib-1.4.1-py2.py3-none-manylinux_2_28_x86_64.whl";
+      hash = "sha256-DVvZjbSNMb7H/tulwjWZv5rkPHAW1MOUbSUkLTIM7ok=";
+    };
+    umf = {
+      version = "1.0.2";
+      url = "https://files.pythonhosted.org/packages/27/8e/4a90b6aa955268988e7491f502b7ac2bd65cb954b4979bfcc892cf019b50/umf-1.0.2-py2.py3-none-manylinux_2_28_x86_64.whl";
+      hash = "sha256-700USiAHpzoaIu5XXuT1oYlKIGUyxvbXe0z1SGQ1Avs=";
+    };
+    intel-pti = {
+      version = "0.15.0";
+      url = "https://files.pythonhosted.org/packages/f4/f0/56874c288e637e1b8619813d5a928778a712e96456f19a2ca1f52b4c9eb0/intel_pti-0.15.0-py2.py3-none-manylinux_2_28_x86_64.whl";
+      hash = "sha256-Yp+9+0wXAZh9zJ+OLAP8GLPsmrXIRi7p3nHJbGK4Lsw=";
+    };
+    triton-xpu = {
+      version = "3.6.0";
+      url = "https://download.pytorch.org/whl/triton_xpu-3.6.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl";
+      hash = "sha256-e6neluXTZAC5lrn7nrOEQxlkU678Efr+GnuyJrxfuLs=";
+    };
   };
 
   # Custom nodes with pinned versions
@@ -204,19 +396,19 @@
     };
 
     rgthree-comfy = {
-      version = "1.0.0";
+      version = "git-2026-09-01-2c5342a8cb0e";
       owner = "rgthree";
       repo = "rgthree-comfy";
-      rev = "v.1.0.0";
-      hash = "sha256-bzQcQ37v7ZrHDitZV6z3h/kdNbWxpLxNSvh0rSxnLss=";
+      rev = "2c5342a8cb0eaecaabf61435a5f37dd594c510ba";
+      hash = "sha256-Z3yKY+6VW5wfsOkI+LrNFd3oZMXKVITtinsNXVXFNec=";
     };
 
     kjnodes = {
-      version = "git-2026-02-04-fb9d5764d21d";
+      version = "git-2026-09-07-c9869eade992";
       owner = "kijai";
       repo = "ComfyUI-KJNodes";
-      rev = "fb9d5764d21d23a3f52186aeccbb259efac96f9c";
-      hash = "sha256-+dFN00f72NqJb6WVLt8CnBoKQnceEt+eTs7nSRY/tgw=";
+      rev = "c9869eade9920a1b949de07c4a197156006bcceb";
+      hash = "sha256-8jhXmMmIdf99bkxZjPXcorPUIpEPEIjFthSTwJUVj+Y=";
     };
 
     gguf = {
@@ -228,19 +420,19 @@
     };
 
     ltxvideo = {
-      version = "git-2026-02-04-49add6dddb2e";
+      version = "git-2026-08-20-15d09abb5a18";
       owner = "Lightricks";
       repo = "ComfyUI-LTXVideo";
-      rev = "49add6dddb2e1bb2d23bc509a9fac3edd2834961";
-      hash = "sha256-KU96XLNjO6tGEUB26vDjE5LVu2bCBiKcYRNehCIBhWY=";
+      rev = "15d09abb5a187a8dcaea2fc31fe51ee96e6c9d0d";
+      hash = "sha256-gIe9PgtRS+B7L3DR0stH1VTUhRxOSMf5W7THB/kGHsw=";
     };
 
     florence2 = {
-      version = "git-2026-02-04-ee64d1ef3fed";
+      version = "git-2026-05-06-9ece3de91421";
       owner = "kijai";
       repo = "ComfyUI-Florence2";
-      rev = "ee64d1ef3fedcb26fff9bcc78065f9eea21ccb87";
-      hash = "sha256-WXqJ3T6Zm7zUw4SEmDujRKvLAQDY1G9al6NTag9YWXo=";
+      rev = "9ece3de914214c5f581d725167bc9d0eeb0d1120";
+      hash = "sha256-TlAntRh6US5IkLzY32K5qTpr8KMQQmEQzUeExAHgDJA=";
     };
 
     bitsandbytes-nf4 = {
@@ -276,11 +468,11 @@
     };
 
     wanvideo = {
-      version = "git-2026-02-04-3d7b49e2df66";
+      version = "git-2026-05-24-088128b22424";
       owner = "kijai";
       repo = "ComfyUI-WanVideoWrapper";
-      rev = "3d7b49e2df66bbbe379cd54748baf9decfe678a2";
-      hash = "sha256-KzzcCQ3ieis9xZRqGJ3usqDJ7xvutp/GEDi7kBFDFTU=";
+      rev = "088128b224242e110d3906c6750e9a3a348a659b";
+      hash = "sha256-/S6sr/6VXx3UxticdE+oxzRtbs+LiG54egMdqIYuB1M=";
     };
   };
 }

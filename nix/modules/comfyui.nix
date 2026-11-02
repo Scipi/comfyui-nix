@@ -9,17 +9,34 @@ let
 
   useCuda = cfg.gpuSupport == "cuda";
   useRocm = cfg.gpuSupport == "rocm";
+  useXpu = cfg.gpuSupport == "xpu";
   useCpu = cfg.gpuSupport == "none";
 
+  # Package set backing the `services.comfyui.package` default. See the
+  # `packageSet` option below.
+  gpuPackage =
+    backend:
+    cfg.packageSet.${backend}
+      or (throw "comfy-ui with ${backend} support is only available on x86_64 Linux");
+
   # Determine which package to use based on configuration
-  # CUDA package uses pre-built wheels supporting all GPU architectures (Pascal through Blackwell)
+  # CUDA package uses pre-built wheels for all supported GPU architectures
   resolvePackage =
     if useCuda then
-      pkgs.comfy-ui-cuda
+      gpuPackage "cuda"
     else if useRocm then
-      pkgs.comfy-ui-rocm
+      gpuPackage "rocm"
+    else if useXpu then
+      gpuPackage "xpu"
     else
-      pkgs.comfy-ui;
+      cfg.packageSet.default;
+  effectivePackage =
+    if cfg.extraPythonPackages == null then
+      cfg.package
+    else if cfg.package.outPath == resolvePackage.outPath then
+      resolvePackage.withExtraPythonPackages cfg.extraPythonPackages
+    else
+      cfg.package;
   args = [
     "--listen"
     cfg.listenAddress
@@ -30,9 +47,12 @@ let
   ]
   ++ lib.optional cfg.enableManager "--enable-manager"
   ++ cfg.extraArgs;
-  env = cfg.environment;
+  # The launcher reads COMFY_SKIP_BUNDLED_NODES; cfg.environment still wins so a
+  # user can override it explicitly.
+  env =
+    lib.optionalAttrs (!cfg.bundledCustomNodes) { COMFY_SKIP_BUNDLED_NODES = "1"; } // cfg.environment;
   escapedArgs = lib.concatStringsSep " " (map lib.escapeShellArg args);
-  execStart = "${cfg.package}/bin/comfy-ui ${escapedArgs}";
+  execStart = "${effectivePackage}/bin/comfy-ui ${escapedArgs}";
 
   # User/group creation: only create if createUser is true AND the user doesn't
   # already exist in the system (i.e., not a pre-existing user like "nobody")
@@ -75,6 +95,12 @@ let
   '';
 in
 {
+  # nixpkgs gained its own `services.comfyui` module (nixos/modules/services/misc/comfyui.nix).
+  # Importing both declares `services.comfyui.enable` twice and evaluation fails, so this
+  # module takes over the namespace. Disabling a module path that does not exist in the
+  # user's nixpkgs is a no-op, so this stays compatible with older releases.
+  disabledModules = [ "services/misc/comfyui.nix" ];
+
   options.services.comfyui = {
     enable = lib.mkEnableOption "ComfyUI service";
 
@@ -82,6 +108,7 @@ in
       type = lib.types.enum [
         "cuda"
         "rocm"
+        "xpu"
         "none"
       ];
       default = "none";
@@ -94,18 +121,37 @@ in
         Select CUDA support for NVIDIA GPUs. This is recommended for most users
         with NVIDIA graphics cards as it provides significant performance improvements.
 
-        When selected, uses pre-built PyTorch CUDA wheels that support all GPU
-        architectures from Pascal (GTX 1080) through Blackwell (RTX 5090) in a single package.
-        Requires NVIDIA drivers to be installed on the system.
+        When selected, uses pre-built PyTorch CUDA 13 wheels that support GPU
+        architectures from Turing (RTX 20 series) through Blackwell (RTX 50 series)
+        in a single package. Requires NVIDIA driver 580 or newer.
 
         ---
 
         Select ROCm support for AMD GPUs. This is recommended for most users
         with AMD graphics cards as it provides significant performance improvements.
 
-        When selected, uses pre-built PyTorch ROCm wheels based on 7.1. Using 
+        When selected, uses pre-built PyTorch ROCm wheels based on 7.1. Using
         this configuration, `gfx1100` has been tested as working, but others
         may also work. Requires AMD drivers to be installed on the system.
+
+        ---
+
+        Select `xpu` for Intel GPUs (oneAPI / SYCL, no IPEX required). Targets
+        Intel Arc A/B series discrete GPUs and Core Ultra iGPUs (Meteor Lake+).
+        Older Xe-LP iGPUs (UHD 770) are not officially supported.
+
+        When selected, you must also configure Intel driver stack on the host,
+        typically via `hardware.graphics`:
+
+        ```
+        hardware.graphics = {
+          enable = true;
+          extraPackages = [ pkgs.intel-compute-runtime pkgs.level-zero ];
+        };
+        ```
+
+        Not yet validated on real Intel hardware by the project maintainers —
+        feedback welcome.
       '';
     };
 
@@ -117,15 +163,18 @@ in
         `nixpkgs.config.cudaCapabilities`. When set, this updates the global
         nixpkgs configuration, so it affects other CUDA packages too.
 
-        Note: ComfyUI's pre-built PyTorch wheels already support all GPU
-        architectures (Pascal through Blackwell). This setting is primarily useful
+        Note: ComfyUI's pre-built PyTorch wheels already support GPU architectures
+        from Turing through Blackwell. This setting is primarily useful
         for optimizing other CUDA-enabled packages in your system configuration.
+
+        Leave this at `null` when using `nixpkgs.nixosModules.readOnlyPkgs`: it is
+        the only option here that writes to `nixpkgs.config`, which that module
+        makes read-only. Set `cudaCapabilities` on your own nixpkgs instance
+        instead.
 
         Example: [ "8.9" ] for Ada Lovelace (RTX 40xx) GPUs.
 
         Common values:
-        - "6.1": Pascal (GTX 1080/1070)
-        - "7.0": Volta (V100)
         - "7.5": Turing (RTX 20xx, GTX 16xx)
         - "8.0": Ampere (A100)
         - "8.6": Ampere (RTX 30xx)
@@ -150,16 +199,46 @@ in
       '';
     };
 
+    packageSet = lib.mkOption {
+      type = lib.types.lazyAttrsOf lib.types.raw;
+      internal = true;
+      default = {
+        default = pkgs.comfy-ui;
+        cuda = pkgs.comfy-ui-cuda;
+        rocm = pkgs.comfy-ui-rocm;
+        xpu = pkgs.comfy-ui-xpu;
+      };
+      defaultText = lib.literalMD ''
+        the `comfy-ui*` attributes from `comfyui-nix.overlays.default`
+      '';
+      description = ''
+        Backend-keyed comfyui-nix packages used to pick the default
+        `services.comfyui.package`.
+
+        `comfyui-nix.nixosModules.default` sets this to the flake's own
+        `packages.<system>`, so importing the module is enough and no overlay is
+        required. The module deliberately does not define `nixpkgs.overlays`
+        itself, because that is incompatible with
+        `nixpkgs.nixosModules.readOnlyPkgs`.
+
+        The default reads the overlay attributes instead, so importing
+        `nix/modules/comfyui.nix` directly keeps working when
+        `comfyui-nix.overlays.default` is in `nixpkgs.overlays`.
+      '';
+    };
+
     package = lib.mkOption {
       type = lib.types.package;
       default = resolvePackage;
-      defaultText = lib.literalExpression ''
-        if useCuda then pkgs.comfy-ui-cuda else if useRocm then pkgs.comfy-ui-rocm else pkgs.comfy-ui
+      defaultText = lib.literalMD ''
+        the comfyui-nix package matching `gpuSupport`, taken from this flake's
+        `packages.<system>` (`cuda`, `rocm`, `xpu` or `default`)
       '';
       description = ''
-        ComfyUI package to run. Automatically set based on CUDA/ROCm configuration:
-        - `gpuSupport = "cuda"`: CUDA package (supports all GPU architectures)
+        ComfyUI package to run. Automatically set based on `gpuSupport`:
+        - `gpuSupport = "cuda"`: CUDA package (all supported GPU architectures)
         - `gpuSupport = "rocm"`: ROCm package (`gfx1100` tested)
+        - `gpuSupport = "xpu"`: Intel XPU package (oneAPI / SYCL; Arc + Core Ultra iGPU)
         - Otherwise: CPU-only build
 
         Can be overridden for fully custom builds.
@@ -224,6 +303,31 @@ in
       description = "Environment variables for the ComfyUI service.";
     };
 
+    extraPythonPackages = lib.mkOption {
+      type = lib.types.nullOr (lib.types.functionTo (lib.types.listOf lib.types.package));
+      default = null;
+      defaultText = lib.literalExpression "null";
+      example = lib.literalExpression ''
+        ps: with ps; [
+          bcrypt
+          pyjwt
+          bleach
+        ]
+      '';
+      description = ''
+        Additional Python packages to include in ComfyUI's packaged runtime.
+        The function receives the same backend-specific Python package set used
+        by the selected CPU, CUDA, ROCm, or XPU package, so pinned core packages
+        such as Torch and NumPy remain consistent.
+
+        Packages are installed declaratively and must be available in nixpkgs.
+        This option does not run custom-node requirements files automatically.
+
+        This option cannot be combined with a custom services.comfyui.package.
+        Package overrides must include their Python dependencies directly.
+      '';
+    };
+
     customNodes = lib.mkOption {
       type = lib.types.attrsOf lib.types.package;
       default = { };
@@ -236,9 +340,9 @@ in
         This is the pure Nix way to manage custom nodes - fully reproducible
         and version-pinned.
 
-        Note: Custom nodes with Python dependencies beyond ComfyUI's base
-        environment may require additional configuration. For complex nodes,
-        consider creating a custom derivation that bundles dependencies.
+        Add Python dependencies beyond ComfyUI's base environment with
+        services.comfyui.extraPythonPackages. Nodes that write files beneath
+        their own source directory still require a separate writable data path.
       '';
       example = lib.literalExpression ''
         {
@@ -259,6 +363,29 @@ in
       '';
     };
 
+    bundledCustomNodes = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Whether to symlink the third-party custom nodes bundled with this
+        package (Impact Pack, KJNodes, GGUF, rgthree, PuLID, and friends) into
+        custom_nodes/ at service start. The project's own model_downloader node
+        is linked either way, since it provides API routes nothing else serves.
+
+        Set to false to leave custom_nodes/ entirely under your own control,
+        managed through ComfyUI-Manager, direct git clones, or the
+        services.comfyui.customNodes option. With this enabled the launcher
+        deletes any real directory whose name collides with a bundled node,
+        which destroys a checkout you installed by other means, and its
+        symlinks overwrite a services.comfyui.customNodes entry declared under
+        one of those names.
+
+        Disabling this removes the symlinks pointing at this build's bundled
+        nodes. Directories you own, and customNodes entries you declared, are
+        left alone.
+      '';
+    };
+
     requiresMounts = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [ ];
@@ -274,6 +401,17 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    assertions = [
+      {
+        assertion = cfg.extraPythonPackages == null || cfg.package.outPath == resolvePackage.outPath;
+        message = ''
+          services.comfyui.extraPythonPackages cannot be combined with a custom
+          services.comfyui.package because rebuilding the Python runtime could
+          silently discard package overrides.
+        '';
+      }
+    ];
+
     nixpkgs.config = lib.mkIf (cfg.cudaCapabilities != null) {
       cudaCapabilities = cfg.cudaCapabilities;
     };
@@ -300,10 +438,15 @@ in
       wants = [ "network-online.target" ];
       requires = cfg.requiresMounts;
       wantedBy = [ "multi-user.target" ];
-      path = lib.optionals useRocm [
-        # rocminfo suppresses a ComfyUI startup warning about missing AMD GPU info
-        pkgs.rocmPackages.rocminfo
-      ];
+      path =
+        lib.optionals useRocm [
+          # rocminfo suppresses a ComfyUI startup warning about missing AMD GPU info
+          pkgs.rocmPackages.rocminfo
+        ]
+        ++ lib.optionals useXpu [
+          # clinfo helps users diagnose Intel GPU visibility from the service env
+          pkgs.clinfo
+        ];
 
       # Symlink declarative custom nodes before starting
       preStart = customNodesPreStart;

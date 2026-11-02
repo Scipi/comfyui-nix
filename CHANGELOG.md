@@ -7,6 +7,376 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `services.comfyui.bundledCustomNodes` (and the `COMFY_SKIP_BUNDLED_NODES=1`
+  environment variable it sets) to leave `custom_nodes/` under your own
+  management. With the bundled set enabled the launcher deletes any real
+  directory sharing a bundled node's name, which destroyed checkouts installed
+  through ComfyUI-Manager or git. The project's own `model_downloader` node is
+  still linked when opted out, since nothing else provides its API routes.
+  ([#92](https://github.com/utensils/comfyui-nix/issues/92))
+
+### Fixed
+- Apple Silicon comfy-kitchen operators use list annotations supported by
+  PyTorch 2.5.1, preventing an import failure during operator registration.
+- Apple Silicon PyTorch shared-memory helpers close inherited resource-tracker
+  pipes, preventing DataLoader shutdown from hanging after tests or inference.
+- Apple Silicon PyTorch uses nixpkgs' OpenMP runtime alongside OpenCV, fixing
+  CPU matrix multiplication crashes when OpenCV is imported first.
+- macOS InsightFace builds use the Nix compiler without probing Homebrew,
+  avoiding a missing `which` executable in the build sandbox.
+- macOS dependency builds select an available port for Valkey's Redis test
+  fixture, avoiding an infinite startup wait when a host service uses port 6379.
+- Apple Silicon builds no longer run Accelerate's FSDP2 parameter-mapping test
+  against the intentionally pinned PyTorch 2.5.1, which lacks FSDP2 support.
+  ([#105](https://github.com/utensils/comfyui-nix/issues/105))
+- Uncached Ultralytics builds skip the dataset utility test that downloads
+  fixture archives from GitHub inside the offline Nix sandbox. All other
+  existing dependency checks remain enabled.
+  ([#99](https://github.com/utensils/comfyui-nix/issues/99))
+- `nixosModules.default` no longer sets `nixpkgs.overlays`, so it composes with
+  `nixpkgs.nixosModules.readOnlyPkgs` instead of failing with
+  `The option 'nixpkgs.overlays' is defined multiple times`. The module gets its
+  packages directly from this flake, so importing it is enough; add
+  `comfyui-nix.overlays.default` yourself only if you also want `pkgs.comfy-ui*`
+  elsewhere in your configuration.
+  ([#101](https://github.com/utensils/comfyui-nix/issues/101))
+- ComfyUI no longer crashes at startup in containers with
+  `KeyError: 'getpwuid(): uid not found: 0'`. The launcher now sets
+  `TORCHINDUCTOR_CACHE_DIR`, which stops torch from deriving a cache path from
+  `getpass.getuser()`, and the Docker images gained `fakeNss` plus `USER`/
+  `LOGNAME` so uid 0 resolves to a name.
+  ([#41](https://github.com/utensils/comfyui-nix/issues/41))
+- `nixos-rebuild` no longer fails on torchsde's statistical
+  `test_normality_conditional`, which asserts a p-value above a threshold that
+  borderline draws fall under. Its test suite is disabled, also removing about
+  3.5 minutes from every build.
+  ([#91](https://github.com/utensils/comfyui-nix/issues/91))
+
+### Changed
+- Updated ComfyUI to upstream `v0.37.0` (from `v0.34.0`). Updated its pinned
+  dependencies: frontend `1.49.6` -> `1.52.7`, workflow templates `0.11.48`
+  -> `0.11.66` (core `0.3.322` -> `0.3.357`, JSON `0.1.57` -> `0.1.92`,
+  media assets 01 `0.1.35` -> `0.1.47`, and the new media assets 02 `0.1.3`),
+  embedded docs `0.5.10` -> `0.5.12`, comfy-kitchen `0.2.31` -> `0.2.35`, and
+  comfy-aimdo `0.4.15` -> `0.5.5`.
+- Regenerated template input files from the current upstream manifest (728
+  files, up from 673).
+- Updated ComfyUI to upstream `v0.34.0` (from `v0.30.2`). Updated its pinned
+  dependencies: frontend `1.47.12` -> `1.49.6`, workflow templates `0.11.31`
+  -> `0.11.48` (core `0.3.295` -> `0.3.322`, JSON `0.1.30` -> `0.1.57`,
+  media assets `0.1.19` -> `0.1.35`), embedded docs `0.5.9` -> `0.5.10`,
+  comfy-kitchen `0.2.26` -> `0.2.31`, and comfy-aimdo `0.4.11` -> `0.4.15`.
+- Updated PyAV `16.0.1` -> `17.0.0`, using its CPython stable-ABI wheels on
+  Linux and macOS, to satisfy ComfyUI's new `av>=17.0.0` requirement.
+- Regenerated template input files from the current upstream manifest (673
+  files, 34 added since `v0.30.2`).
+- Upgraded Linux CUDA builds from PyTorch cu128 to cu130 and switched the
+  runtime toolchain and libraries from CUDA 12.8 to CUDA 13.0.
+  NVIDIA driver 580 or newer is now required.
+
+### Upstream Highlights (v0.35.0 - v0.37.0)
+- Added native support for Qwen-Image 2.1, MoGe 3, Marigold v2, YuE2 music,
+  SenseNova U1.5, and WAN3-Prime, plus Qwen3 CUDA graphs and w4a8 GEMV.
+- Added the Comfy Compiler, generic loops in the graph
+  executor, and automatic `--fast-disk` detection (disable with
+  `--disable-fast-disk`).
+- Added Video Trim, Video Crop, and Video Concatenate nodes, a File3DToMesh
+  node, AVIF output in Save Image Advanced, and linear color space in
+  ImageColorSpace.
+- Memory limits now follow the container's cgroup limit instead of host RAM,
+  and TRELLIS, MiniMax-H3, and Wan workflows use less peak VRAM.
+- Added or expanded partner nodes for Recraft V4, Gemini 3.8 Flash, Tripo P2,
+  Bria, Flux Video Edit, Pruna P-Video-2, GPT Image 2, and Meshy 7.1.
+
+### Upstream Highlights (v0.31.0 - v0.34.0)
+- Added native support for LTX 2.5, Wan-Animate2, MiniMax Music 3, TRELLIS2,
+  Pixal3D, SAM3D Body, and taeh3.
+- Added HDR video output, AV1 encoding, MKV/WebM containers, H.264 color-space
+  selection, and per-token MiniMax-H3 video/audio latent noise masks.
+- Added or expanded partner nodes for Wan 3.0, Fish Audio, Seedance 2.5,
+  Seedream, Flux Video Upscale, Meshy 7, Gemini 3.7 Flash, and PixVerse V6.
+- Improved Gemma4 text generation, MiniMax-H3 conditioning, DynamicVRAM error
+  reporting, and enabled DynamicVRAM by default on ROCm 7.14 and newer.
+- Fixed temporary and external asset preview handling, custom user database
+  paths, nested-latent sampling without added noise, and several model-specific
+  decoding and text-generation regressions.
+
+### Removed
+- CUDA support for Pascal and Volta GPUs, the pre-Turing architectures supported
+  by previous releases. CUDA 13 no longer provides compiler or library support
+  for pre-Turing GPUs. Pascal and Volta users must remain on an earlier
+  comfyui-nix release; Maxwell and older architectures were already unsupported.
+
+## [0.30.2] - 2026-08-05
+
+### Fixed
+- Updated the bundled rgthree-comfy extension so its frontend-only nodes load
+  with ComfyUI v0.30.0 instead of being replaced by the incompatible 2023
+  v1.0.0 bundle (#76)
+- Resolved macOS startup failures: kornia is now included in the macOS Python
+  runtime and the bundled ComfyUI-LTXVideo extension was updated to a revision
+  compatible with current ComfyUI, replacing the local compatibility patch (#75)
+- model_downloader no longer logs download URLs, request headers, or request
+  bodies, so credentials such as HuggingFace tokens stay out of the logs (#75)
+
+### Changed
+- Upgraded ComfyUI from v0.30.0 to v0.30.2
+- Updated `comfyui-frontend-package` 1.47.11 -> 1.47.12
+- Updated `comfyui-workflow-templates` 0.11.27 -> 0.11.31
+- Updated `comfyui-workflow-templates-core` 0.3.292 -> 0.3.295
+- Updated `comfyui-workflow-templates-json` 0.1.27 -> 0.1.30
+- Updated `comfyui-workflow-templates-media-assets-01` 0.1.17 -> 0.1.19
+- Regenerated template input files
+
+### Upstream Highlights (v0.30.1 - v0.30.2)
+- Partner nodes: TopazAI Bloom 2 and Wonder 3.5 model support, BFL Flux 3
+  video model
+- Kling partner nodes: removed retired legacy models and the Virtual Try-On API
+
+## [0.30.0] - 2026-08-04
+
+### Added
+- Added `services.comfyui.extraPythonPackages` for reproducibly including
+  custom-node dependencies in the selected CPU, CUDA, ROCm, or XPU Python
+  runtime without replacing pinned core packages (#58)
+
+### Changed
+- Upgraded ComfyUI from v0.28.2 to v0.30.0
+- Updated `comfyui-frontend-package` 1.45.21 -> 1.47.11
+- Updated `comfyui-workflow-templates` 0.11.12 -> 0.11.27
+- Updated `comfyui-workflow-templates-core` 0.3.275 -> 0.3.292
+- Updated `comfyui-workflow-templates-json` 0.1.9 -> 0.1.27
+- Updated `comfyui-workflow-templates-media-assets-01` 0.1.5 -> 0.1.17
+- Updated `comfyui-embedded-docs` 0.5.8 -> 0.5.9
+- Updated `comfy-kitchen` 0.2.20 -> 0.2.26
+- Updated `comfy-aimdo` 0.4.10 -> 0.4.11
+- Regenerated template input files
+
+### Upstream Highlights (v0.29.0 - v0.30.0)
+- Model weights load to process RAM with an MRU pinning policy for faster model switching
+- New model support: MiniMax-H3, MageFlow, Gemma4 12B, JoyImageEdit, PrunaVAED (faster LTX 2.3 decoder), anima lllite control models
+- Native Uni3C ControlNet support for Wan models
+- comfy-kitchen int8/rms-rope optimizations across many models, plus AMD support
+- Fallback to cudnn attention on Linux when flash attention fails
+- Security hardening: dataset folder isolation, SVG preview fix, stricter path containment checks
+- Save video node CRF option, mp4 metadata written at start of file, CSV output for the save text node
+
+## [0.28.2] - 2026-07-19
+
+### Changed
+- Upgraded ComfyUI from v0.28.1 to v0.28.2
+- Updated `comfyui-workflow-templates` 0.11.11 -> 0.11.12
+- Updated `comfyui-workflow-templates-core` 0.3.274 -> 0.3.275
+- Updated `comfyui-workflow-templates-json` 0.1.8 -> 0.1.9
+- Regenerated template input files
+
+### Upstream Highlights (v0.28.2)
+- Google partner nodes switched to the Interactions API for the Omni model
+
+## [0.28.1] - 2026-07-17
+
+### Fixed
+- `comfy-aimdo` and `comfy-kitchen` now use platform wheels with their native
+  libraries (`aimdo.so`, `_C.abi3.so`) on Linux instead of the pure-Python
+  `py3-none-any` wheels, enabling DynamicVRAM support and the comfy-kitchen
+  CUDA backend (#66)
+- model_downloader now resolves model directories dynamically from ComfyUI's
+  `folder_paths` via a new `/model-downloader/folders` endpoint instead of a
+  stale hardcoded list, so models for newer folder types (e.g.
+  `latent_upscale_models`) no longer land in `checkpoints/` (#65)
+
+### Changed
+- Upgraded ComfyUI from v0.25.0 to v0.28.1
+- Updated `comfyui-frontend-package` 1.45.15 -> 1.45.21
+- Updated `comfyui-workflow-templates` 0.10.0 -> 0.11.11
+- Updated `comfyui-workflow-templates-core` 0.3.255 -> 0.3.274
+- Updated `comfyui-workflow-templates-media-api` 0.3.80 -> 0.3.84
+- Updated `comfyui-workflow-templates-media-video` 0.3.92 -> 0.3.101
+- Updated `comfyui-workflow-templates-media-image` 0.3.152 -> 0.3.160
+- Updated `comfyui-workflow-templates-media-other` 0.3.220 -> 0.3.229
+- Updated `comfyui-embedded-docs` 0.5.4 -> 0.5.8
+- Updated `comfy-kitchen` 0.2.10 -> 0.2.20
+- Regenerated template input files (618 files)
+
+### Added
+- Vendored new workflow template subpackages: `comfyui-workflow-templates-json` 0.1.8 and `comfyui-workflow-templates-media-assets-01` 0.1.5
+- Vendored `comfy-angle` 0.1.0 (ANGLE libEGL/libGLESv2 for the new GLSL shader nodes) with platform-specific wheels for x86_64-linux, aarch64-linux, and aarch64-darwin; autoPatchelf'd against Nix-provided X11 libs on Linux
+
+### Removed
+- Dropped `glfw` from the Python runtime (replaced upstream by `comfy-angle` in v0.28)
+
+### Upstream Highlights (v0.25.1 - v0.28.1)
+- Security fixes for four vulnerabilities (GHSA-779p-m5rp-r4h4)
+- int8 convrot model support (v0.27)
+- New GLSL shader nodes backed by ANGLE
+- Qwen3-VL text generation support and flux2 klein text encoder integration
+- SCAIL-2 multireference, Boogu-Image, Seed Audio 1.0, SeeDance 2.0 Mini/4K, Kling V3-Turbo, Krea 2 model merging
+- Removal of deprecated IdeogramV1/V2 and StabilityAI partner nodes
+
+## [0.25.0] - 2026-06-18
+
+### Changed
+- Upgraded ComfyUI from v0.19.3 to v0.25.0
+- Updated `comfyui-frontend-package` 1.42.11 -> 1.45.15
+- Updated `comfyui-workflow-templates` 0.9.57 -> 0.10.0
+- Updated `comfyui-workflow-templates-core` 0.3.209 -> 0.3.255
+- Updated `comfyui-workflow-templates-media-api` 0.3.69 -> 0.3.80
+- Updated `comfyui-workflow-templates-media-video` 0.3.78 -> 0.3.92
+- Updated `comfyui-workflow-templates-media-image` 0.3.127 -> 0.3.152
+- Updated `comfyui-workflow-templates-media-other` 0.3.176 -> 0.3.220
+- Updated `comfyui-embedded-docs` 0.4.3 -> 0.5.4
+- Updated `comfyui-manager` 4.1 -> 4.2.2
+- Updated `comfy-kitchen` 0.2.8 -> 0.2.10
+- Updated `comfy-aimdo` 0.2.12 -> 0.4.10
+- Updated PyAV wheel override 14.2.0 -> 16.0.1 to satisfy ComfyUI's `av>=16.0.0` requirement
+- Regenerated template input files (589 files)
+- Aligned runtime package constraints with upstream ComfyUI v0.25.0 requirements
+- Removed obsolete unused LTXVideo rotary embedding compatibility patch
+
+### Upstream Highlights (v0.20.1 - v0.25.0)
+- New and updated 3D, video, audio, asset-management, and API node features
+- Cursor-based asset pagination, image dimension metadata, asset IDs in execution messages, and `/system_stats` deploy environment reporting
+- New flags including `--debug-hang`, `--high-ram`, dynamic `--reserve-vram`, and `--vram-headroom`
+- SCAIL-2, Bernini-R, Depth Anything 3, LTX/Wan/Qwen/Ideogram improvements, and 10-bit video support
+- Multiple fixes for video decode edge cases, pinned-memory pressure, quantized weights, dtype handling, and manager enablement behavior
+
+### Fixed
+- Escaped the `awk` snippet printed by `nix run .#update` so it no longer fails under `set -u`
+
+## [0.19.3] - 2026-04-22
+
+### Changed
+- Upgraded ComfyUI from v0.18.2 to v0.19.3
+- Updated `comfyui-frontend-package` 1.41.21 → 1.42.11
+- Updated `comfyui-workflow-templates` 0.9.36 → 0.9.57
+- Updated `comfyui-workflow-templates-core` 0.3.185 → 0.3.209
+- Updated `comfyui-workflow-templates-media-api` 0.3.67 → 0.3.69
+- Updated `comfyui-workflow-templates-media-video` 0.3.67 → 0.3.78
+- Updated `comfyui-workflow-templates-media-image` 0.3.113 → 0.3.127
+- Updated `comfyui-workflow-templates-media-other` 0.3.158 → 0.3.176
+- Updated `comfyui-manager` 4.1b6 → 4.1 (GA release per upstream PR #13156)
+- Regenerated template input files (510 files)
+
+### Upstream Highlights (v0.19.0 – v0.19.3)
+- New models: LongCat-Image edit, Qwen3.5 text generation, Ace Step 1.5 XL, small flux.2 decoder, RT-DETRv4 detection, LTX2 reference audio (ID-LoRA)
+- New nodes: CURVE, Number Convert, Image Histogram, JsonExtractString; Text-prefixed string/util nodes with search aliases
+- API nodes: xAI Grok updates, Topaz, WAN2.7, Sonilo Audio, arrow-1.1/-max SVG, Tencent3D update, 1080p for SeeDance 2.0
+- RAM cache integrated with model RAM management; fp8-scaled checkpoint fix; OOM regression fix for quantized models
+- Intel XPU portable release and standalone package
+- Output files registered as assets after prompt execution; image/svg+xml MIME registered
+- Fixes: blur/sharpen fp16 intermediates, ernie image and fp64-less devices, LTX text-gen regression, canny fp16, crash paths for Train LoRA
+
+## [0.18.2] - 2026-04-06
+
+### Changed
+- Upgraded ComfyUI from v0.18.0 to v0.18.2
+- Updated `comfyui-workflow-templates` 0.9.26 → 0.9.36
+- Updated `comfyui-workflow-templates-core` 0.3.175 → 0.3.185
+- Updated `comfyui-workflow-templates-media-api` 0.3.64 → 0.3.67
+- Updated `comfyui-workflow-templates-media-video` 0.3.63 → 0.3.67
+- Updated `comfyui-workflow-templates-media-image` 0.3.107 → 0.3.113
+- Updated `comfyui-workflow-templates-media-other` 0.3.148 → 0.3.158
+- Regenerated template input files (497 files)
+
+### Upstream Highlights (v0.18.1 – v0.18.2)
+- Fix canny node not working with fp16
+- Fix sampling issue with fp16 intermediates
+- Fix fp16 intermediates giving different results
+- Fix Wan VAE light/color issue
+- Updated xAI Grok API nodes
+
+## [0.18.0] - 2026-03-21
+
+### Changed
+- Upgraded ComfyUI from v0.17.2 to v0.18.0
+- Updated `comfyui-frontend-package` 1.41.20 → 1.41.21
+- Updated `comfyui-workflow-templates` 0.9.21 → 0.9.26
+- Updated `comfyui-workflow-templates-core` 0.3.168 → 0.3.175
+- Updated `comfyui-workflow-templates-media-video` 0.3.60 → 0.3.63
+- Updated `comfyui-workflow-templates-media-image` 0.3.104 → 0.3.107
+- Updated `comfyui-workflow-templates-media-other` 0.3.141 → 0.3.148
+- Updated `comfyui-manager` 4.1b2 → 4.1b6
+- Updated `comfy-aimdo` 0.2.10 → 0.2.12
+
+### Fixed
+- Replace deprecated `system` overlay attribute with `stdenv.hostPlatform.system` (#42)
+
+### Upstream Highlights (v0.18.0)
+- mxfp8 quantization format support
+- `--fp16-intermediates` flag for fp16 intermediate values between operations
+- `--enable-dynamic-vram` flag to force-enable dynamic VRAM management
+- CacheProvider API for external distributed caching (re-landed)
+- FP4/8/16 native dtype training support with quant linear autograd
+- Essentials tab with `essentials_category` for nodes and blueprints
+- Quiver SVG API nodes; `slice_cond` and per-model context window conditioning
+- Major VRAM reductions: LTX VAE chunked encoder, WAN VAE, tiled decode, inplace output processing
+- Improved RAM pressure release strategies (Windows speedups via comfy-aimdo 0.2.12)
+- PyTorch Attention enabled for AMD gfx1150 (Strix Point)
+- Atomic writes for userdata to prevent data loss on crash
+- No-store cache headers to prevent stale frontend chunks
+
+## [0.17.2] - 2026-03-20
+
+### Changed
+- Upgraded ComfyUI from v0.16.4 to v0.17.2 (3 upstream releases)
+- Updated `comfyui-frontend-package` 1.39.19 → 1.41.20
+- Updated `comfyui-workflow-templates` 0.9.11 → 0.9.21
+- Updated `comfyui-workflow-templates-core` 0.3.159 → 0.3.168
+- Updated `comfyui-workflow-templates-media-api` 0.3.59 → 0.3.64
+- Updated `comfyui-workflow-templates-media-video` 0.3.57 → 0.3.60
+- Updated `comfyui-workflow-templates-media-image` 0.3.98 → 0.3.104
+- Updated `comfyui-workflow-templates-media-other` 0.3.131 → 0.3.141
+- Updated `comfyui-manager` 4.0.5 → 4.1b2
+- Updated `comfy-kitchen` 0.2.7 → 0.2.8
+- Updated `comfy-aimdo` 0.2.7 → 0.2.10
+
+### Added
+- `blake3` Python dependency (new upstream requirement)
+
+### Upstream Highlights (v0.16.5 – v0.17.2)
+- Assets refactor: modular architecture with async two-phase scanner and background seeder
+- Flux 2 Klein KV Cache model support (new `FluxKVCache` node) with lower memory usage
+- Pre-attention patches API for Flux models; post-input patches for Qwen image model
+- New nodes: Painter node, Reve Image API nodes
+- Lora fix for text encoder loading on wrapped models
+- `torch.AcceleratorError` guard for torch < 2.8.0 compatibility
+- Python faulthandler enabled by default for better crash diagnostics
+- Bug fixes: batch_size > 1, OOM handling, audio extraction/truncation, Float gradient_stops
+
+## [0.16.4] - 2026-03-20
+
+### Added
+- RTX 5090 (Blackwell / `sm_120`) CUDA support via PyTorch cu128 wheels (#39)
+- New Python dependencies: `simpleeval`, `pyopengl`, `glfw` for ComfyUI core features
+- CUDA library dependencies: `libcusparseLt`, `libcufile`, `libnvshmem` for cu128 wheels
+
+### Changed
+- Upgraded ComfyUI from v0.14.2 to v0.16.4 (7 upstream releases) (#40)
+- Upgraded CUDA PyTorch wheels from cu124 (2.5.1) to cu128 (2.10.0), supporting Pascal through Blackwell
+- Updated ROCm PyTorch wheels to 2.10.0+rocm7.1
+- Updated `comfyui-frontend-package` 1.38.14 → 1.39.19
+- Updated `comfyui-workflow-templates` 0.8.43 → 0.9.11
+- Updated `comfyui-workflow-templates-core` 0.3.147 → 0.3.159
+- Updated `comfyui-workflow-templates-media-api` 0.3.54 → 0.3.59
+- Updated `comfyui-workflow-templates-media-video` 0.3.49 → 0.3.57
+- Updated `comfyui-workflow-templates-media-image` 0.3.90 → 0.3.98
+- Updated `comfyui-workflow-templates-media-other` 0.3.123 → 0.3.131
+- Updated `comfyui-embedded-docs` 0.4.1 → 0.4.3
+- Updated `comfy-aimdo` 0.1.8 → 0.2.7
+- Updated `spandrel` 0.4.1 → 0.4.2
+- Updated custom nodes: ComfyUI-KJNodes, ComfyUI-LTXVideo, ComfyUI-Florence2, ComfyUI-WanVideoWrapper
+
+### Upstream Highlights (v0.14.3 – v0.16.4)
+- Math Expression node using `simpleeval` (replaces JSONata)
+- Database support via `alembic` + `SQLAlchemy` (`--database-url`)
+- 3D rendering via `PyOpenGL` + `glfw`
+- Dynamic VRAM CPU optimization for text encoders
+
+### Fixed
+- Pin template input URLs to commit SHA instead of mutable `refs/heads/main` branch ref, preventing hash mismatch errors (#36)
+- Fix `sed -re` (GNU-only) → `sed -E` (POSIX-portable) in update script for macOS compatibility (#36)
+- xformers OOM during CUDA build by limiting ninja parallelism (`MAX_JOBS=2`) (#39)
 ## [0.14.2] - 2026-02-19
 
 ### Added
@@ -186,7 +556,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Apple Silicon (M-series) support
 - Basic persistence for user data
 
-[Unreleased]: https://github.com/utensils/comfyui-nix/compare/v0.14.2...HEAD
+[Unreleased]: https://github.com/utensils/comfyui-nix/compare/v0.30.2...HEAD
+[0.30.2]: https://github.com/utensils/comfyui-nix/compare/v0.30.0...v0.30.2
+[0.30.0]: https://github.com/utensils/comfyui-nix/compare/v0.28.2...v0.30.0
+[0.28.2]: https://github.com/utensils/comfyui-nix/compare/v0.28.1...v0.28.2
+[0.28.1]: https://github.com/utensils/comfyui-nix/compare/v0.25.0...v0.28.1
+[0.25.0]: https://github.com/utensils/comfyui-nix/compare/v0.19.3...v0.25.0
+[0.19.3]: https://github.com/utensils/comfyui-nix/compare/v0.18.2...v0.19.3
+[0.18.2]: https://github.com/utensils/comfyui-nix/compare/v0.18.0...v0.18.2
+[0.18.0]: https://github.com/utensils/comfyui-nix/compare/v0.17.2...v0.18.0
+[0.17.2]: https://github.com/utensils/comfyui-nix/compare/v0.16.4...v0.17.2
+[0.16.4]: https://github.com/utensils/comfyui-nix/compare/v0.14.2...v0.16.4
 [0.14.2]: https://github.com/utensils/comfyui-nix/compare/v0.12.2...v0.14.2
 [0.12.2]: https://github.com/utensils/comfyui-nix/compare/v0.7.0-2...v0.12.2
 [0.7.0-2]: https://github.com/utensils/comfyui-nix/compare/v0.7.0-1...v0.7.0-2

@@ -1,23 +1,62 @@
 {
   pkgs,
   versions,
-  gpuSupport ? "none", # "none", "cuda", "rocm"
+  gpuSupport ? "none", # "none", "cuda", "rocm", "xpu"
 }:
 let
   lib = pkgs.lib;
-  useCuda = gpuSupport == "cuda" && pkgs.stdenv.isLinux;
-  useRocm = gpuSupport == "rocm" && pkgs.stdenv.isLinux;
-  useDarwinArm64 = pkgs.stdenv.isDarwin && pkgs.stdenv.hostPlatform.isAarch64;
+  useCuda = gpuSupport == "cuda" && pkgs.stdenv.hostPlatform.isLinux;
+  useRocm = gpuSupport == "rocm" && pkgs.stdenv.hostPlatform.isLinux;
+  # Intel XPU wheels are Linux x86_64 only (no aarch64 upstream)
+  useXpu =
+    gpuSupport == "xpu" && pkgs.stdenv.hostPlatform.isLinux && pkgs.stdenv.hostPlatform.isx86_64;
+  useDarwinArm64 = pkgs.stdenv.hostPlatform.isDarwin && pkgs.stdenv.hostPlatform.isAarch64;
   sentencepieceNoGperf = pkgs.sentencepiece.override { withGPerfTools = false; };
+  cudaPackages = pkgs.cudaPackages_13;
 
   # Pre-built PyTorch CUDA wheels from pytorch.org
   # These avoid compiling PyTorch from source (which requires 30-60GB RAM and hours of build time)
-  # The wheels bundle CUDA 12.8 libraries, so no separate CUDA toolkit needed at runtime
-  cudaWheels = versions.pytorchWheels.cu128;
+  # CUDA runtime libraries are supplied by nixpkgs, so no separate toolkit is needed at runtime
+  cudaWheels = versions.pytorchWheels.cu130;
 
   # Pre-built PyTorch ROCm wheels from pytorch.org
   # These avoid compiling PyTorch from source (which requires 30-60GB RAM and hours of build time)
   rocmWheels = versions.pytorchWheels.rocm71;
+
+  # Pre-built PyTorch XPU wheels from pytorch.org (Intel oneAPI / SYCL)
+  # Unlike CUDA/ROCm, the XPU torch wheel does NOT bundle its SYCL / MKL /
+  # Intel compiler runtimes — they ship as ~20 separate PyPI wheels declared
+  # in Requires-Dist. All pinned in versions.xpuRuntime and packaged below.
+  # Host still provides Level Zero loader + Intel compute-runtime at runtime.
+  xpuWheels = versions.pytorchWheels.xpu;
+
+  # Ignore-list for deps neither the wheels nor nixpkgs provide.
+  # Intel wheel-to-wheel SONAME refs are resolved via cross-wheel buildInputs
+  # in the mkIntelRuntime helper below — NOT via this ignore list.
+  xpuIgnoreMissingLibs = [
+    # Host-provided (Level Zero loader + Intel compute-runtime, on NixOS via
+    # hardware.graphics.extraPackages, on other distros via system packaging)
+    "libze_loader.so.1"
+    "libze_intel_gpu.so.1"
+    "libOpenCL.so.1"
+    "libigdrcl.so"
+    "libigc.so.2"
+    # impi-rt fabric plugins (RDMA / InfiniBand / PSM / EFA / UCX) — loaded
+    # only when MPI distributed mode is requested. ComfyUI is single-node, so
+    # these fabric adapters are never opened and can safely be absent.
+    "librdmacm.so.1"
+    "libibverbs.so.1"
+    "libucp.so.0"
+    "libucs.so.0"
+    "libuct.so.0"
+    "libnuma.so.1"
+    "libpsm2.so.2"
+    "libefa.so.1"
+    "libfabric.so.1"
+    "libnl-3.so.200"
+    "libnl-route-3.so.200"
+    "libze_loader.so" # versionless alias
+  ];
 
   # Pre-built PyTorch wheels for macOS Apple Silicon
   # PyTorch 2.5.1 is used instead of 2.9.x due to MPS bugs on macOS 26 (Tahoe)
@@ -32,23 +71,38 @@ let
     pkgs.glib
   ];
 
-  # CUDA libraries needed by PyTorch wheels (for auto-patchelf)
+  # CUDA libraries needed by PyTorch wheels (for auto-patchelf).
+  #
+  # These replace the `nvidia-*` PyPI wheels the torch wheel asks for, which we
+  # strip from its metadata. nixpkgs does not always carry the exact versions
+  # PyTorch pinned, and because the SONAMEs match, auto-patchelf accepts the
+  # substitution silently — any mismatch surfaces only at runtime. Current deltas
+  # against `torch-2.10.0+cu130`:
+  #
+  #   cuDNN         wheel wants 9.15.1.9  nixpkgs has 9.13.0.50  (older — risky direction)
+  #   NCCL          wheel wants 2.28.9    nixpkgs has 2.28.7     (older — risky direction)
+  #   cuSPARSELt    wheel wants 0.8.0     nixpkgs has 0.8.1.1    (newer — safe direction)
+  #
+  # The cuDNN/NCCL deltas are latent, not active: every symbol libtorch_cuda.so
+  # imports from them is still exported by the older builds. They clear once the
+  # nixpkgs input is bumped, which is blocked on the vendored-wheel metadata work
+  # in https://github.com/utensils/comfyui-nix/issues/81
   cudaLibs = pkgs.lib.optionals useCuda (
-    with pkgs.cudaPackages;
+    with cudaPackages;
     [
-      cuda_cudart # libcudart.so.12
-      cuda_cupti # libcupti.so.12
-      libcublas # libcublas.so.12, libcublasLt.so.12
-      libcufft # libcufft.so.11
+      cuda_cudart # libcudart.so.13
+      cuda_cupti # libcupti.so.13
+      libcublas # libcublas.so.13, libcublasLt.so.13
+      libcufft # libcufft.so.12
       libcurand # libcurand.so.10
-      libcusolver # libcusolver.so.11
+      libcusolver # libcusolver.so.12
       libcusparse # libcusparse.so.12
-      libcusparse_lt # libcusparseLt.so.0 (structured sparsity, new in cu128)
-      libcufile # libcufile.so.0 (GPU Direct Storage, new in cu128)
-      libnvshmem # libnvshmem_host.so.3 (multi-GPU shared memory, new in cu128)
+      libcusparse_lt # libcusparseLt.so.0 (structured sparsity)
+      libcufile # libcufile.so.0 (GPU Direct Storage)
+      libnvshmem # libnvshmem_host.so.3 (multi-GPU shared memory)
       cudnn # libcudnn.so.9
       nccl # libnccl.so.2
-      cuda_nvrtc # libnvrtc.so.12
+      cuda_nvrtc # libnvrtc.so.13
     ]
   );
 
@@ -65,7 +119,9 @@ let
 in
 final: prev:
 # CUDA torch from pre-built wheels - avoids 30-60GB RAM compilation
-# The wheels bundle CUDA libraries internally, providing full GPU support
+# Unlike the ROCm wheels, these do NOT bundle their CUDA libraries: the wheel
+# declares them as separate `nvidia-*` PyPI requirements, which we strip from the
+# metadata below and satisfy from nixpkgs via `cudaLibs` instead.
 lib.optionalAttrs useCuda {
   torch = final.buildPythonPackage {
     pname = "torch";
@@ -85,11 +141,14 @@ lib.optionalAttrs useCuda {
     # libcuda.so.1 comes from the NVIDIA driver at runtime, not from cudaPackages
     autoPatchelfIgnoreMissingDeps = [ "libcuda.so.1" ];
 
-    # Remove nvidia-* and triton dependencies from wheel metadata
-    # These are provided by nixpkgs cudaPackages, not PyPI packages
+    # The CUDA wheel names PyPI CUDA packages that are provided by nixpkgs
+    # cudaPackages instead. The runtime dependency hook cannot recognize those
+    # system providers, so validate the rewritten installed metadata below.
+    dontCheckRuntimeDeps = true;
     postInstall = ''
       for metadata in "$out/${final.python.sitePackages}"/torch-*.dist-info/METADATA; do
         if [[ -f "$metadata" ]]; then
+          sed -i '/^Requires-Dist: cuda-bindings/d' "$metadata"
           sed -i '/^Requires-Dist: nvidia-/d' "$metadata"
           sed -i '/^Requires-Dist: triton/d' "$metadata"
         fi
@@ -103,20 +162,18 @@ lib.optionalAttrs useCuda {
       networkx
       jinja2
       fsspec
+      setuptools
     ];
     # Don't check for CUDA at import time (requires GPU)
     pythonImportsCheck = [ ];
     doCheck = false;
 
     # Passthru attributes expected by downstream packages (xformers, bitsandbytes, etc.)
-    # The wheel bundles CUDA 12.8 and supports all GPU architectures
     passthru = {
       cudaSupport = true;
       rocmSupport = false;
-      # All architectures supported by pre-built wheel (Pascal through Blackwell)
+      # All architectures supported by the pre-built wheel
       cudaCapabilities = [
-        "6.1"
-        "7.0"
         "7.5"
         "8.0"
         "8.6"
@@ -125,8 +182,8 @@ lib.optionalAttrs useCuda {
         "10.0" # Blackwell (B100/B200 data center)
         "12.0" # Blackwell (RTX 50xx consumer)
       ];
-      # Provide cudaPackages for packages that need it (use default version)
-      cudaPackages = pkgs.cudaPackages;
+      # Provide the matching CUDA package set for downstream packages
+      inherit cudaPackages;
       rocmPackages = { };
     };
 
@@ -244,6 +301,42 @@ lib.optionalAttrs useCuda {
     };
     dontBuild = true;
     dontConfigure = true;
+    # The 2.5.1 wheel pins sympy==1.13.1, which nixpkgs no longer ships. The
+    # combination has always been what this flake builds and runs, so relax the
+    # bound rather than pin sympy back. Drop this when the wheel is bumped.
+    pythonRelaxDeps = [ "sympy" ];
+    # pythonRelaxDeps normally runs in postBuild, which this prebuilt wheel
+    # skips via dontBuild. Remove this phase override when nixpkgs rewrites
+    # wheel metadata before its runtime dependency check.
+    preInstallPhases = [ "pythonRelaxDepsHook" ];
+    nativeBuildInputs = [ pkgs.cctools ];
+    # OpenCV's dependencies already load nixpkgs OpenMP. Loading the wheel's
+    # second runtime afterwards crashes CPU matmul inside __kmp_suspend_64.
+    # Use the same runtime regardless of Python module import order.
+    postFixup = ''
+      install_name_tool -change @rpath/libomp.dylib \
+        ${pkgs.llvmPackages.openmp}/lib/libomp.dylib \
+        "$out/${final.python.sitePackages}/torch/lib/libtorch_cpu.dylib"
+      rm "$out/${final.python.sitePackages}/torch/lib/libomp.dylib"
+
+      # Spawned DataLoader workers pass Python's resource-tracker pipe to the
+      # manager. Keeping it open deadlocks interpreter shutdown while tensors
+      # still hold manager sockets. The manager only needs stdin/out/err.
+      manager="$out/${final.python.sitePackages}/torch/bin/torch_shm_manager"
+      mv "$manager" "$manager.real"
+      cat > manager-launcher.c <<EOF
+      #include <stdio.h>
+      #include <unistd.h>
+      int main(int argc, char **argv) {
+          int max_fd = getdtablesize();
+          for (int fd = 3; fd < max_fd; ++fd) close(fd);
+          execv("$manager.real", argv);
+          perror("torch_shm_manager");
+          return 127;
+      }
+      EOF
+      $CC -O2 manager-launcher.c -o "$manager"
+    '';
     propagatedBuildInputs = with final; [
       filelock
       typing-extensions
@@ -251,6 +344,7 @@ lib.optionalAttrs useCuda {
       networkx
       jinja2
       fsspec
+      setuptools
     ];
     pythonImportsCheck = [ "torch" ];
     doCheck = false;
@@ -335,6 +429,11 @@ lib.optionalAttrs useCuda {
     ];
     buildInputs = wheelBuildInputs ++ rocmLibs;
 
+    # The ROCm wheel names triton-rocm, which is provided by the bundled ROCm
+    # runtime rather than a PyPI package. The runtime dependency hook cannot
+    # recognize that provider, so validate the rewritten installed metadata in
+    # the rocm-torch-runtime-deps check instead.
+    dontCheckRuntimeDeps = true;
     # These are provided by nixpkgs rocmPackages, not PyPI packages
     postInstall = ''
       for metadata in "$out/${final.python.sitePackages}"/torch-*.dist-info/METADATA; do
@@ -351,6 +450,7 @@ lib.optionalAttrs useCuda {
       networkx
       jinja2
       fsspec
+      setuptools
     ];
     # Don't check for ROCm at import time (requires GPU)
     pythonImportsCheck = [ ];
@@ -387,7 +487,9 @@ lib.optionalAttrs useCuda {
     nativeBuildInputs = [ pkgs.autoPatchelfHook ];
     buildInputs = wheelBuildInputs ++ rocmLibs ++ [ final.torch ];
 
-    # Ignore torch libs (loaded via Python import)
+    # Torch libs live in a non-standard path (site-packages/torch/lib/) so
+    # autoPatchelf can't find them. We ignore them during patching and add
+    # the RPATH manually in postFixup so _C.so can find libc10.so at runtime.
     autoPatchelfIgnoreMissingDeps = [
       "libc10.so"
       "libc10_hip.so"
@@ -403,12 +505,18 @@ lib.optionalAttrs useCuda {
       "libMIOpen.so.1"
       "librocrand.so.1"
     ];
+    postFixup = ''
+      local torchLib="${final.torch}/${final.torch.pythonModule.sitePackages}/torch/lib"
+      for so in $out/${final.torch.pythonModule.sitePackages}/torchvision/*.so; do
+        ${pkgs.patchelf}/bin/patchelf --add-rpath "$torchLib" "$so"
+      done
+    '';
     propagatedBuildInputs = with final; [
       torch
       numpy
       pillow
     ];
-    pythonImportsCheck = [ ];
+    pythonImportsCheck = [ "torchvision" ];
     doCheck = false;
     meta = {
       description = "TorchVision with ROCm (pre-built wheel)";
@@ -480,6 +588,271 @@ lib.optionalAttrs useCuda {
     };
   };
 }
+# Intel XPU torch + runtime wheels
+# The XPU torch wheel only contains torch-proper binaries (~240 MB). Its Intel
+# runtime dependencies (SYCL, MKL, oneCCL, Intel compiler RT, TBB, PTI, triton)
+# ship as ~20 separate wheels pinned in versions.xpuRuntime. Each is built as
+# its own Python package below via mkIntelRuntime, then all are propagated as
+# torch's deps so auto-patchelf can resolve libtorch_xpu.so's sibling SONAMEs.
+// lib.optionalAttrs useXpu (
+  let
+    # triton-xpu ships a real Python `triton/` top-level module (not just .so
+    # files under .data/data/lib), so it needs its own buildPythonPackage for
+    # Python to import it. Without this, torch.compile / Inductor falls back
+    # to nixpkgs' non-XPU triton or fails at dynamo compile time.
+    tritonXpu = final.buildPythonPackage {
+      pname = "triton";
+      version = versions.xpuRuntime.triton-xpu.version;
+      format = "wheel";
+      src = pkgs.fetchurl {
+        url = versions.xpuRuntime.triton-xpu.url;
+        hash = versions.xpuRuntime.triton-xpu.hash;
+      };
+      dontBuild = true;
+      dontConfigure = true;
+      nativeBuildInputs = [ pkgs.autoPatchelfHook ];
+      buildInputs = wheelBuildInputs;
+      autoPatchelfIgnoreMissingDeps = xpuIgnoreMissingLibs;
+      propagatedBuildInputs = with final; [ filelock ];
+      pythonImportsCheck = [ ]; # needs XPU runtime; can't import in build sandbox
+      doCheck = false;
+      dontCheckRuntimeDeps = true;
+      meta = {
+        description = "Triton compiler with Intel XPU backend";
+        homepage = "https://github.com/intel/intel-xpu-backend-for-triton";
+        license = lib.licenses.mit;
+        platforms = [ "x86_64-linux" ];
+      };
+    };
+
+    # The other Intel runtime wheels contain no Python code — just .so files
+    # under the wheel's `.data/data/lib/` convention. Rather than 21 individual
+    # buildPythonPackage derivations (which cross-reference each other and
+    # trigger infinite recursion through requiredPythonModules), fetch and
+    # unpack each wheel into a single combined derivation. All cross-wheel
+    # SONAMEs resolve against this unified lib/ dir, and it's one buildInput
+    # for torch instead of 21. triton-xpu is excluded — see tritonXpu above.
+    intelOneapiRuntime = pkgs.stdenv.mkDerivation {
+      pname = "intel-oneapi-runtime";
+      version = "2025.3";
+      srcs = lib.mapAttrsToList (_: spec: pkgs.fetchurl { inherit (spec) url hash; }) (
+        lib.filterAttrs (n: _: n != "triton-xpu") versions.xpuRuntime
+      );
+      dontConfigure = true;
+      dontBuild = true;
+      sourceRoot = ".";
+      nativeBuildInputs = [
+        pkgs.unzip
+        pkgs.autoPatchelfHook
+      ];
+      buildInputs = wheelBuildInputs;
+      autoPatchelfIgnoreMissingDeps = xpuIgnoreMissingLibs;
+      unpackPhase = ''
+        runHook preUnpack
+        for whl in $srcs; do
+          mkdir -p "wheel_$(basename "$whl" .whl)"
+          unzip -q "$whl" -d "wheel_$(basename "$whl" .whl)"
+        done
+        runHook postUnpack
+      '';
+      installPhase = ''
+        runHook preInstall
+        mkdir -p $out/lib $out/share/intel-oneapi
+        # Collect .so files from each wheel's .data/data/lib into $out/lib.
+        # Later wheels' files overwrite earlier only on exact filename match;
+        # Intel wheels use distinct filenames so this is safe.
+        for wheel_dir in wheel_*; do
+          if [ -d "$wheel_dir" ]; then
+            for data_lib in "$wheel_dir"/*.data/data/lib; do
+              if [ -d "$data_lib" ]; then
+                cp -rn "$data_lib"/. $out/lib/ 2>/dev/null || \
+                  cp -r "$data_lib"/. $out/lib/
+              fi
+            done
+            # Also copy any top-level lib dirs (some wheels use that layout)
+            if [ -d "$wheel_dir/lib" ]; then
+              cp -rn "$wheel_dir/lib"/. $out/lib/ 2>/dev/null || true
+            fi
+            # Preserve license / manifest files under share/ for compliance
+            for meta in "$wheel_dir"/*.dist-info/METADATA; do
+              if [ -f "$meta" ]; then
+                pname=$(basename "$(dirname "$meta")" .dist-info)
+                mkdir -p "$out/share/intel-oneapi/$pname"
+                cp "$meta" "$out/share/intel-oneapi/$pname/"
+              fi
+            done
+          fi
+        done
+        runHook postInstall
+      '';
+      # Runtime library stuff — no binaries, no Python, just .so files.
+      dontStrip = true;
+      meta = {
+        description = "Combined Intel oneAPI runtime libraries (from PyPI wheels)";
+        homepage = "https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit.html";
+        license = lib.licenses.unfreeRedistributable;
+        platforms = [ "x86_64-linux" ];
+      };
+    };
+  in
+  {
+    # Expose triton as a named attr so python.withPackages can pick it up.
+    triton = tritonXpu;
+
+    torch = final.buildPythonPackage {
+      pname = "torch";
+      version = xpuWheels.torch.version;
+      format = "wheel";
+      src = pkgs.fetchurl {
+        url = xpuWheels.torch.url;
+        hash = xpuWheels.torch.hash;
+      };
+      dontBuild = true;
+      dontConfigure = true;
+      nativeBuildInputs = [ pkgs.autoPatchelfHook ];
+      # Combined Intel oneAPI runtime derivation provides all SYCL/MKL/oneCCL/
+      # Intel compiler RT / TBB / PTI .so files. Listed in buildInputs so
+      # auto-patchelf adds its lib/ to torch's RPATH and resolves sibling
+      # SONAMEs (libsycl.so.8, libmkl_sycl_*.so.5, libccl.so.1, etc).
+      buildInputs = wheelBuildInputs ++ [ intelOneapiRuntime ];
+      autoPatchelfIgnoreMissingDeps = xpuIgnoreMissingLibs;
+      # Intel oneAPI runtime is propagated so its lib/ is on LD_LIBRARY_PATH
+      # at ComfyUI runtime (the launcher also sets this explicitly). triton
+      # is propagated so torch.compile / Inductor can import the XPU backend.
+      propagatedBuildInputs =
+        (with final; [
+          filelock
+          typing-extensions
+          sympy
+          networkx
+          jinja2
+          fsspec
+          setuptools
+        ])
+        ++ [ tritonXpu ];
+      propagatedNativeBuildInputs = [ intelOneapiRuntime ];
+      pythonImportsCheck = [ ];
+      doCheck = false;
+      dontCheckRuntimeDeps = true; # Intel wheel pip names use hyphens/underscores inconsistently
+
+      # The XPU wheel names ~20 Intel runtime wheels that nixpkgs provides under
+      # different pip-visible names, so anything that resolves torch's declared
+      # requirements reports every one of them as missing. dontCheckRuntimeDeps
+      # above only covers this derivation; downstream builds (xformers builds a
+      # wheel with `pypa build --no-isolation`, which validates build deps) read
+      # the installed METADATA and fail. Strip those entries, exactly as the
+      # CUDA wheel does for its nvidia-* requirements. Nix still supplies the
+      # libraries through propagatedBuildInputs.
+      postInstall = ''
+        for metadata in "$out/${final.python.sitePackages}"/torch-*.dist-info/METADATA; do
+          if [[ -f "$metadata" ]]; then
+            sed -i -E '/^Requires-Dist: (dpcpp-|impi-|intel-|mkl|oneccl|onemkl-|tbb|tcmlib|triton|umf)/d' "$metadata"
+          fi
+        done
+      '';
+
+      passthru = {
+        cudaSupport = false;
+        rocmSupport = false;
+        xpuSupport = true;
+        cudaPackages = { };
+      };
+
+      meta = {
+        description = "PyTorch with Intel XPU ${xpuWheels.torch.version} (pre-built wheel, oneAPI/SYCL)";
+        homepage = "https://pytorch.org";
+        license = lib.licenses.bsd3;
+        platforms = [ "x86_64-linux" ];
+      };
+    };
+
+    torchvision = final.buildPythonPackage {
+      pname = "torchvision";
+      version = xpuWheels.torchvision.version;
+      format = "wheel";
+      src = pkgs.fetchurl {
+        url = xpuWheels.torchvision.url;
+        hash = xpuWheels.torchvision.hash;
+      };
+      dontBuild = true;
+      dontConfigure = true;
+      nativeBuildInputs = [ pkgs.autoPatchelfHook ];
+      buildInputs = wheelBuildInputs ++ [ final.torch ];
+      # torch libs are loaded via Python import, not dlopen
+      autoPatchelfIgnoreMissingDeps = [
+        "libc10.so"
+        "libc10_xpu.so"
+        "libtorch.so"
+        "libtorch_cpu.so"
+        "libtorch_xpu.so"
+        "libtorch_python.so"
+      ];
+      propagatedBuildInputs = with final; [
+        torch
+        numpy
+        pillow
+      ];
+      pythonImportsCheck = [ ];
+      doCheck = false;
+      meta = {
+        description = "TorchVision with Intel XPU (pre-built wheel)";
+        homepage = "https://pytorch.org/vision";
+        license = lib.licenses.bsd3;
+        platforms = [ "x86_64-linux" ];
+      };
+    };
+
+    torchaudio = final.buildPythonPackage {
+      pname = "torchaudio";
+      version = xpuWheels.torchaudio.version;
+      format = "wheel";
+      src = pkgs.fetchurl {
+        url = xpuWheels.torchaudio.url;
+        hash = xpuWheels.torchaudio.hash;
+      };
+      dontBuild = true;
+      dontConfigure = true;
+      nativeBuildInputs = [ pkgs.autoPatchelfHook ];
+      buildInputs = wheelBuildInputs ++ [ final.torch ];
+      autoPatchelfIgnoreMissingDeps = [
+        "libc10.so"
+        "libc10_xpu.so"
+        "libtorch.so"
+        "libtorch_cpu.so"
+        "libtorch_xpu.so"
+        "libtorch_python.so"
+        "libsox.so"
+        # FFmpeg 4.x/5.x/6.x — same as ROCm torchaudio (wheel bundles multiple backends)
+        "libavutil.so.56"
+        "libavcodec.so.58"
+        "libavformat.so.58"
+        "libavfilter.so.7"
+        "libavdevice.so.58"
+        "libavutil.so.57"
+        "libavcodec.so.59"
+        "libavformat.so.59"
+        "libavfilter.so.8"
+        "libavdevice.so.59"
+        "libavutil.so.58"
+        "libavcodec.so.60"
+        "libavformat.so.60"
+        "libavfilter.so.9"
+        "libavdevice.so.60"
+      ];
+      propagatedBuildInputs = with final; [
+        torch
+      ];
+      pythonImportsCheck = [ ];
+      doCheck = false;
+      meta = {
+        description = "TorchAudio with Intel XPU (pre-built wheel)";
+        homepage = "https://pytorch.org/audio";
+        license = lib.licenses.bsd2;
+        platforms = [ "x86_64-linux" ];
+      };
+    };
+  }
+)
 # Spandrel and other packages that need explicit torch handling
 // lib.optionalAttrs (prev ? torch) {
   spandrel = final.buildPythonPackage rec {
@@ -512,7 +885,7 @@ lib.optionalAttrs useCuda {
 # Note: When useCuda=true, torch/torchvision/torchaudio are replaced with pre-built wheels
 # above. Packages that depend on torch (kornia, accelerate, etc.) will automatically
 # use our wheel-based torch via final.torch since we've overridden it in the overlay.
-// lib.optionalAttrs (pkgs.stdenv.isDarwin && prev ? sentencepiece) {
+// lib.optionalAttrs (pkgs.stdenv.hostPlatform.isDarwin && prev ? sentencepiece) {
   sentencepiece = prev.sentencepiece.overridePythonAttrs (old: {
     buildInputs = [ sentencepieceNoGperf.dev ];
     nativeBuildInputs = old.nativeBuildInputs or [ ];
@@ -528,27 +901,27 @@ lib.optionalAttrs useCuda {
 // lib.optionalAttrs (prev ? av) {
   av =
     let
-      # Use platform-specific wheels from PyPI (av 14.2.0, Python 3.12)
+      # Use platform-specific abi3 wheels from PyPI (av 17.0.0, Python 3.12)
       wheelSrc =
-        if pkgs.stdenv.isLinux && pkgs.stdenv.hostPlatform.isx86_64 then
+        if pkgs.stdenv.hostPlatform.isLinux && pkgs.stdenv.hostPlatform.isx86_64 then
           pkgs.fetchurl {
-            url = "https://files.pythonhosted.org/packages/ed/e8/cf60f3fcde3d0eedee3e9ff66b674a9b85bffc907dccebbc56fb5ac4a954/av-14.2.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl";
-            hash = "sha256-FMXwCwtg0SesDN5Gpbzptn6QW6kwM/3UiuVQwMBdUbg=";
+            url = "https://files.pythonhosted.org/packages/d2/59/d19bc3257dd985d55337d7f0414c019414b97e16cd3690ebf9941a847543/av-17.0.0-cp311-abi3-manylinux_2_28_x86_64.whl";
+            hash = "sha256-EGDLqF+X9KM3MRFp2SwLXhQ0Us+lyg5l+kmdeVXoWS4=";
           }
-        else if pkgs.stdenv.isLinux && pkgs.stdenv.hostPlatform.isAarch64 then
+        else if pkgs.stdenv.hostPlatform.isLinux && pkgs.stdenv.hostPlatform.isAarch64 then
           pkgs.fetchurl {
-            url = "https://files.pythonhosted.org/packages/d3/c3/a174388d393f1564ad4c1b8300eb4f3e972851a4d392c1eba66a6848749e/av-14.2.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl";
-            hash = "sha256-iXvppmXDZd/PDBCiV/4iNSHtTTtHjmslj1X3zRP97dM=";
+            url = "https://files.pythonhosted.org/packages/00/c0/637721f3cd5bb8bd16105a1a08efd781fc12f449931bdb3a4d0cfd63fa55/av-17.0.0-cp311-abi3-manylinux_2_28_aarch64.whl";
+            hash = "sha256-tEDaasR9oGKdUJMW8kvNhY8zFY290PG3KT1x6ZvrJt4=";
           }
-        else if pkgs.stdenv.isDarwin && pkgs.stdenv.hostPlatform.isx86_64 then
+        else if pkgs.stdenv.hostPlatform.isDarwin && pkgs.stdenv.hostPlatform.isx86_64 then
           pkgs.fetchurl {
-            url = "https://files.pythonhosted.org/packages/89/36/787af232db9b3d5bbd5eb4d1d46c51b9669cba5b2273bb68a445cb281db8/av-14.2.0-cp312-cp312-macosx_12_0_x86_64.whl";
-            hash = "sha256-amqunheq5PKpczWCXApwG3Y7cqr4lCjypwu9yDtkrSM=";
+            url = "https://files.pythonhosted.org/packages/b1/fb/55e3b5b5d1fc61466292f26fbcbabafa2642f378dc48875f8f554591e1a4/av-17.0.0-cp311-abi3-macosx_11_0_x86_64.whl";
+            hash = "sha256-7UAT+sd8MJpKaBQdz2FI8YIbsQc6NtQok3l2KmNy9xE=";
           }
-        else if pkgs.stdenv.isDarwin && pkgs.stdenv.hostPlatform.isAarch64 then
+        else if pkgs.stdenv.hostPlatform.isDarwin && pkgs.stdenv.hostPlatform.isAarch64 then
           pkgs.fetchurl {
-            url = "https://files.pythonhosted.org/packages/5b/88/b56f5e5fa2486ee51413b043e08c7f5ed119c1e10b72725593da30adc28f/av-14.2.0-cp312-cp312-macosx_12_0_arm64.whl";
-            hash = "sha256-o9o+lRFIKR1w9ss/s3v4FYCwGZLpFe8QMBCOQHb2LTg=";
+            url = "https://files.pythonhosted.org/packages/52/03/9ace1acc08bc9ae38c14bf3a4b1360e995e4d999d1d33c2cbd7c9e77582a/av-17.0.0-cp311-abi3-macosx_14_0_arm64.whl";
+            hash = "sha256-5Etsg+nzvp957ofQt3onzqmpzWe9YwNiyGt+VqdI37s=";
           }
         else
           # Fallback to source build for unsupported platforms
@@ -557,7 +930,7 @@ lib.optionalAttrs useCuda {
     if wheelSrc != null then
       final.buildPythonPackage {
         pname = "av";
-        version = "14.2.0";
+        version = "17.0.0";
         format = "wheel";
         src = wheelSrc;
         # Wheel contains bundled FFmpeg libraries
@@ -565,8 +938,8 @@ lib.optionalAttrs useCuda {
         dontConfigure = true;
         propagatedBuildInputs = [ final.numpy ];
         # Linux manylinux wheels need autoPatchelfHook to fix library paths
-        nativeBuildInputs = lib.optionals pkgs.stdenv.isLinux [ pkgs.autoPatchelfHook ];
-        buildInputs = lib.optionals pkgs.stdenv.isLinux [
+        nativeBuildInputs = lib.optionals pkgs.stdenv.hostPlatform.isLinux [ pkgs.autoPatchelfHook ];
+        buildInputs = lib.optionals pkgs.stdenv.hostPlatform.isLinux [
           pkgs.stdenv.cc.cc.lib
           pkgs.zlib
         ];
@@ -603,10 +976,79 @@ lib.optionalAttrs useCuda {
   });
 }
 
-# Disable accelerate test that fails with torch 2.10.0 inductor in Nix sandbox
-// lib.optionalAttrs ((useCuda || useRocm) && (prev ? accelerate)) {
+# inline-snapshot 0.34.2 fails three of its own documentation tests on the
+# pinned nixpkgs (they assert formatter output that has since changed) and is
+# not in the binary cache, so it gets built from source. It reaches us only as
+# a test helper in fastapi's checkInputs, where its own doc tests say nothing
+# about whether it works. Without this, fastapi and everything downstream of
+# it (openai, openapi-core, sqlframe) cannot build.
+// lib.optionalAttrs (prev ? inline-snapshot) {
+  inline-snapshot = prev.inline-snapshot.overridePythonAttrs (_old: {
+    doCheck = false;
+  });
+}
+
+# backrefs' test_timeout asserts that a regex operation exceeds a wall-clock
+# timeout, which does not hold on every builder: it passes locally but fails
+# on CI runners with "DID NOT RAISE TimeoutError". backrefs is not in the
+# binary cache on the pinned nixpkgs, so it is built from source and the flake
+# test runs. It reaches us transitively through einops' check inputs, and the
+# failure cascades all the way up to pyright-check.
+// lib.optionalAttrs (prev ? backrefs) {
+  backrefs = prev.backrefs.overridePythonAttrs (old: {
+    disabledTests = (old.disabledTests or [ ]) ++ [ "test_timeout" ];
+  });
+}
+
+# These asynchronous kernel-disconnect tests are sensitive to load in the Nix
+# sandbox: orphan cleanup can miss its deadline, which also makes the companion
+# file-descriptor assertion report the sockets that are still being cleaned up.
+# jupyter-server reaches us through einops' check inputs, like backrefs above.
+// lib.optionalAttrs (prev ? jupyter-server) {
+  jupyter-server = prev.jupyter-server.overridePythonAttrs (old: {
+    disabledTests = (old.disabledTests or [ ]) ++ [
+      "test_no_fd_leak_on_disconnect_with_orphaned_kernel_info_channel"
+      "test_disconnect_resolves_orphaned_kernel_info_future"
+    ];
+  });
+}
+
+# Keep accelerate's tests compatible with our platform-specific torch wheels.
+// lib.optionalAttrs (prev ? accelerate) {
   accelerate = prev.accelerate.overridePythonAttrs (old: {
-    disabledTests = (old.disabledTests or [ ]) ++ [ "test_convert_to_fp32" ];
+    disabledTests =
+      (old.disabledTests or [ ])
+      # torch 2.10.0 inductor cannot run this test in the Nix sandbox.
+      ++ lib.optionals (useCuda || useRocm || useXpu) [ "test_convert_to_fp32" ]
+      # FSDP2 requires torch >= 2.6; Apple Silicon intentionally uses 2.5.1
+      # for MPS stability. This test lacks a working version guard.
+      ++ lib.optionals useDarwinArm64 [ "test_param_mapping_error_handling" ];
+  });
+}
+
+# This dataset utility test downloads fixture archives from GitHub. Disable it
+# on every platform so uncached builds also work without sandbox networking.
+// lib.optionalAttrs (prev ? ultralytics) {
+  ultralytics = prev.ultralytics.overridePythonAttrs (old: {
+    disabledTests = (old.disabledTests or [ ]) ++ [ "test_data_utils" ];
+  });
+}
+
+# Isolate Valkey's Redis test server from existing services on Darwin hosts.
+// lib.optionalAttrs (pkgs.stdenv.hostPlatform.isDarwin && prev ? valkey) {
+  valkey = prev.valkey.overridePythonAttrs (old: {
+    # Darwin builds share the host's ports. The Redis test hook otherwise
+    # retries forever when an existing service occupies its default port 6379.
+    preCheck = (old.preCheck or "") + ''
+      redisTestPort="$(${final.python.interpreter} - <<'PY'
+      import socket
+      with socket.socket() as server:
+          server.bind(("127.0.0.1", 0))
+          print(server.getsockname()[1])
+      PY
+      )"
+      pytestFlagsArray+=("--valkey-url=valkey://127.0.0.1:$redisTestPort/0")
+    '';
   });
 }
 
@@ -624,7 +1066,7 @@ lib.optionalAttrs useCuda {
 
 # Relax xformers torch version requirement (relaxes torch version constraint)
 # Limit build parallelism to prevent OOM during flash-attention CUDA kernel compilation
-# (sm_90 CUTLASS kernels with CUDA 12.8 consume ~3GB RAM each)
+# (sm_90 CUTLASS kernels consume ~3GB RAM each)
 // lib.optionalAttrs (prev ? xformers) {
   xformers = prev.xformers.overridePythonAttrs (old: {
     nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ final.pythonRelaxDepsHook ];
@@ -642,10 +1084,32 @@ lib.optionalAttrs useCuda {
   });
 }
 
+# mss runs screenshot tests through a virtual X server. They are not relevant
+# to ComfyUI's runtime dependency closure and can fail in a headless Nix build
+# sandbox. Remove this override once nixpkgs' mss checks are sandbox-independent.
+// lib.optionalAttrs (prev ? mss) {
+  mss = prev.mss.overridePythonAttrs (_old: {
+    doCheck = false;
+  });
+}
+
+# torchsde's test suite costs ~3.5 minutes of every build of this flake, and it
+# is statistical rather than functional: test_normality_conditional asserts a
+# Kolmogorov-Smirnov p-value stays above 1e-5, so a borderline draw lands under
+# it and fails the whole nixos-rebuild for an unrelated reason. Dropping the
+# suite rather than just that test buys back the build time; pythonImportsCheck
+# still runs, and ComfyUI only uses torchsde's samplers.
+# See: https://github.com/utensils/comfyui-nix/issues/91
+// lib.optionalAttrs (prev ? torchsde) {
+  torchsde = prev.torchsde.overridePythonAttrs (_old: {
+    doCheck = false;
+  });
+}
+
 # Disable filterpy tests on Darwin (test_hinfinity triggers BPT trap in pytest)
 // lib.optionalAttrs (prev ? filterpy) {
   filterpy = prev.filterpy.overridePythonAttrs (old: {
-    doCheck = if pkgs.stdenv.isDarwin then false else (old.doCheck or true);
+    doCheck = if pkgs.stdenv.hostPlatform.isDarwin then false else (old.doCheck or true);
   });
 }
 
@@ -672,6 +1136,10 @@ lib.optionalAttrs useCuda {
       scipy
     ];
     doCheck = false;
+    # Upstream wheel's Requires-Dist lists ddt/docutils/matplotlib (docs/tests)
+    # and imageio (try/except-optional in io_handler.py) as mandatory runtime deps.
+    # Only numpy + pillow are actually required at import time.
+    dontCheckRuntimeDeps = true;
     pythonImportsCheck = [ "color_matcher" ];
   };
 }
@@ -690,6 +1158,14 @@ lib.optionalAttrs useCuda {
     dontBuild = true;
     dontConfigure = true;
     nativeBuildInputs = [ pkgs.gnused ];
+    # facexlib's wheel names the PyPI opencv-python distribution, while nixpkgs
+    # opencv4 provides the required cv2 module without matching distribution
+    # metadata. Remove this when facexlib accepts a system OpenCV provider.
+    pythonRemoveDeps = [ "opencv-python" ];
+    # pythonRemoveDeps normally runs in postBuild, which this prebuilt wheel
+    # skips. Remove this phase override when nixpkgs rewrites wheel metadata
+    # before its runtime dependency check.
+    preInstallPhases = [ "pythonRelaxDepsHook" ];
     propagatedBuildInputs = with final; [
       numpy
       opencv4
@@ -698,6 +1174,7 @@ lib.optionalAttrs useCuda {
       torchvision
       filterpy
       numba
+      tqdm
     ];
 
     # Patch misc.py to respect FACEXLIB_MODELPATH environment variable
@@ -721,6 +1198,15 @@ lib.optionalAttrs useCuda {
 # This enables PuLID and other face-related nodes on macOS Apple Silicon.
 // lib.optionalAttrs (prev ? insightface) {
   insightface = prev.insightface.overridePythonAttrs (old: {
+    # Nix supplies the compiler; upstream's Homebrew probe requires an absent
+    # `which` executable and can select a compiler outside the build sandbox.
+    postPatch =
+      (old.postPatch or "")
+      + lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
+        substituteInPlace setup.py \
+          --replace-fail 'if platform.system() == "Darwin":' 'if False: # Compiler provided by Nix'
+      '';
+
     # Remove mxnet from dependencies - it's only used for one legacy CLI command
     # and prevents the package from working on macOS (mxnet is Linux-only in nixpkgs)
     dependencies = builtins.filter (dep: dep.pname or "" != "mxnet") (old.dependencies or [ ]);

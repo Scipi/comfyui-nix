@@ -9,16 +9,22 @@
       name,
       tag,
       comfyUiPackage,
-      gpuSupport ? "none", # "none", "cuda", "rocm"
-      cudaVersion ? "cu128",
+      gpuSupport ? "none", # "none", "cuda", "rocm", "xpu"
       extraLabels ? { },
     }:
     let
       useCuda = gpuSupport == "cuda";
       useRocm = gpuSupport == "rocm";
+      useXpu = gpuSupport == "xpu";
       useCpu = gpuSupport == "none";
       baseEnv = [
         "HOME=/root"
+        # Python's getpass.getuser() reads these before consulting the passwd
+        # database. fakeNss below covers callers that go to pwd.getpwuid()
+        # directly; between them uid 0 resolves to a name either way.
+        # See: https://github.com/utensils/comfyui-nix/issues/41
+        "USER=root"
+        "LOGNAME=root"
         "COMFY_USER_DIR=/data"
         "TMPDIR=/tmp"
         "PATH=/bin:/usr/bin"
@@ -30,21 +36,32 @@
         "NVIDIA_VISIBLE_DEVICES=all"
         "NVIDIA_DRIVER_CAPABILITIES=compute,utility"
       ];
+      # Intel compute-runtime ICD is registered via OCL_ICD_VENDORS so that
+      # ocl-icd (via /etc/OpenCL/vendors) can find it inside the container.
+      xpuEnv = lib.optionals useXpu [
+        "OCL_ICD_VENDORS=${pkgs.intel-compute-runtime}/etc/OpenCL/vendors"
+      ];
+      titleSuffix =
+        if useCuda then
+          " CUDA"
+        else if useRocm then
+          " ROCm"
+        else if useXpu then
+          " XPU"
+        else
+          "";
+      descSuffix =
+        if useCuda then
+          " with CUDA support for GPU acceleration"
+        else if useRocm then
+          " with ROCm support for GPU acceleration"
+        else if useXpu then
+          " with Intel XPU support (oneAPI / SYCL) for GPU acceleration"
+        else
+          " - The most powerful and modular diffusion model GUI";
       labels = {
-        "org.opencontainers.image.title" =
-          if useCuda then
-            "ComfyUI CUDA"
-          else if useRocm then
-            "ComfyUI ROCm"
-          else
-            "ComfyUI";
-        "org.opencontainers.image.description" =
-          if useCuda then
-            "ComfyUI with CUDA support for GPU acceleration"
-          else if useRocm then
-            "ComfyUI with ROCm support for GPU acceleration"
-          else
-            "ComfyUI - The most powerful and modular diffusion model GUI";
+        "org.opencontainers.image.title" = "ComfyUI" + titleSuffix;
+        "org.opencontainers.image.description" = "ComfyUI" + descSuffix;
         "org.opencontainers.image.source" = "https://github.com/utensils/comfyui-nix";
         "org.opencontainers.image.licenses" = "GPL-3.0";
       }
@@ -57,6 +74,9 @@
       copyToRoot = pkgs.buildEnv {
         name = "comfy-ui-root";
         paths = [
+          # /etc/passwd + /etc/group for uid 0. Without them anything reaching
+          # pwd.getpwuid() raises "uid not found" inside the container.
+          pkgs.dockerTools.fakeNss
           pkgs.bash
           pkgs.coreutils
           pkgs.netcat
@@ -73,6 +93,14 @@
         ++ lib.optionals useRocm [
           # rocminfo suppresses a ComfyUI startup warning about missing AMD GPU info
           pkgs.rocmPackages.rocminfo
+        ]
+        ++ lib.optionals useXpu [
+          # XPU userland: Level Zero loader, Intel compute-runtime (OpenCL ICD
+          # + Level Zero driver). Users still must pass `--device /dev/dri` and
+          # have a compatible i915/xe kernel driver on the host.
+          pkgs.level-zero
+          pkgs.intel-compute-runtime
+          pkgs.ocl-icd
         ];
         pathsToLink = [
           "/bin"
@@ -89,7 +117,7 @@
           "0.0.0.0"
         ]
         ++ lib.optionals useCpu [ "--cpu" ];
-        Env = baseEnv ++ cudaEnv;
+        Env = baseEnv ++ cudaEnv ++ xpuEnv;
         ExposedPorts = {
           "8188/tcp" = { };
         };

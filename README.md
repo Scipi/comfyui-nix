@@ -24,7 +24,7 @@ For CUDA (Linux/NVIDIA):
 nix run github:utensils/comfyui-nix#cuda
 ```
 
-CUDA builds use pre-built PyTorch wheels from pytorch.org, so builds are fast (~2GB download) and support all GPU architectures from Pascal (GTX 1080) through Blackwell (RTX 5090) in a single package.
+CUDA builds use pre-built PyTorch wheels from pytorch.org, so builds are fast (~2GB download) and support NVIDIA GPU architectures from Turing (RTX 20 series) through Blackwell (RTX 50 series) in a single package.
 
 For ROCm (Linux/AMD):
 
@@ -33,6 +33,14 @@ nix run github:utensils/comfyui-nix#rocm
 ```
 
 ROCm builds use pre-built PyTorch wheels from pytorch.org, so builds are fast (~2GB download); so far, GPU support has only been validated on `gfx1100`.
+
+For Intel XPU (Linux/Intel GPU):
+
+```bash
+nix run github:utensils/comfyui-nix#xpu
+```
+
+XPU builds use pre-built PyTorch wheels from pytorch.org's XPU channel (oneAPI / SYCL, no IPEX required). Officially supports Intel Arc A/B series and Core Ultra iGPUs (Meteor Lake+). Older Xe-LP iGPUs (UHD 770) are not officially supported.
 
 ## Options
 
@@ -61,14 +69,15 @@ CUDA builds are available for Linux with NVIDIA GPUs. The `#cuda` package uses p
 
 - **Fast builds**: Downloads ~2GB of pre-built wheels instead of compiling for hours
 - **Low memory**: No 30-60GB RAM requirement for compilation
-- **All architectures**: Supports Pascal (GTX 1080) through Blackwell (RTX 5090) in one package
-- **Bundled runtime**: CUDA 12.8 libraries included in wheels (no separate toolkit needed)
+- **Current architectures**: Supports Turing (RTX 20 series) through Blackwell (RTX 50 series) in one package
+- **Included runtime**: CUDA 13.0 libraries provided by nixpkgs in the Nix closure (no separate toolkit needed)
+- **Driver requirement**: NVIDIA driver 580 or newer
 
 ```bash
 nix run github:utensils/comfyui-nix#cuda
 ```
 
-This single package works on any NVIDIA GPU from the past ~8 years.
+CUDA 13 no longer supports pre-Turing GPUs. Pascal and Volta users must use an older comfyui-nix release; earlier architectures were already unsupported.
 
 ## ROCm GPU Support
 
@@ -84,6 +93,67 @@ nix run github:utensils/comfyui-nix#rocm
 ```
 
 > ROCm support contributed by [@pyqlsa](https://github.com/pyqlsa) — thank you!
+
+## Intel XPU (oneAPI / SYCL) Support
+
+Intel XPU builds are available for Linux x86_64 with Intel GPUs. The `#xpu` package uses pre-built PyTorch wheels from pytorch.org's XPU channel which:
+
+- **Fast builds**: Downloads ~2.5GB of pre-built wheels instead of compiling for hours
+- **No IPEX required**: In-tree `torch.xpu` backend is sufficient; ComfyUI auto-detects XPU
+- **Bundled runtime**: SYCL / oneAPI / MKL / TBB included in wheels
+
+### Officially supported hardware
+
+- Intel Arc A-series (Alchemist) and B-series (Battlemage) discrete GPUs
+- Core Ultra iGPUs: Meteor Lake, Arrow Lake, Lunar Lake, Panther Lake (Xe-LPG / Xe2)
+- Data Center GPU Max (Ponte Vecchio)
+
+Older Xe-LP iGPUs (UHD 770 on Alder/Raptor Lake) are **not officially supported** by Intel/PyTorch and may not work even if detected.
+
+### Host driver setup
+
+The XPU wheels bundle the SYCL runtime, but the host must provide:
+
+- Kernel driver: `i915` (Arc Alchemist) or `xe` (Battlemage, newer iGPUs)
+- Userland: Level Zero loader + Intel compute-runtime + OpenCL ICD
+
+**On NixOS** (recommended — keeps userland ICD in sync with the kernel DRM driver):
+
+```nix
+hardware.graphics = {
+  enable = true;
+  extraPackages = [
+    pkgs.intel-compute-runtime
+    pkgs.level-zero
+  ];
+};
+```
+
+The launcher prefers `/run/opengl-driver/lib` when present. On non-NixOS Linux (Ubuntu, Arch, etc.), the package bundles `level-zero` and `intel-compute-runtime` as a fallback, so `nix run .#xpu` works without additional system setup — but keep kernel drivers up to date for your GPU generation.
+
+### Running
+
+```bash
+nix run github:utensils/comfyui-nix#xpu
+```
+
+### iGPU FP64 emulation
+
+iGPUs (UHD 770, older Xe-LP) lack native FP64 hardware. If you hit `"double precision not supported"` errors, enable emulation:
+
+```bash
+COMFY_ENABLE_XPU_FP64_EMULATION=1 nix run github:utensils/comfyui-nix#xpu
+```
+
+This sets `OverrideDefaultFP64Settings=1` + `IGC_EnableDPEmulation=1`. Off by default so discrete Arc users surface real errors rather than silently emulating.
+
+### SYCL kernel cache
+
+JIT-compiled SYCL kernels are cached under `<data-directory>/.cache/libsycl_cache/` via `SYCL_CACHE_PERSISTENT=1`. First generation is slower while kernels compile; subsequent runs reuse the cache.
+
+### Status
+
+XPU support has not been tested on real Intel hardware by the project maintainers. Feedback, bug reports, and benchmarks from Intel GPU users are very welcome — please open an issue describing your hardware, kernel version, and what works / doesn't work.
 
 ## Why a Nix Flake?
 
@@ -132,6 +202,15 @@ Some custom nodes have hardcoded paths that don't exist on NixOS. We automatical
 
 The following custom nodes are bundled and automatically linked on first run:
 
+To manage `custom_nodes/` yourself instead — through ComfyUI-Manager, git
+clones, or `services.comfyui.customNodes` — set `COMFY_SKIP_BUNDLED_NODES=1`
+(`services.comfyui.bundledCustomNodes = false` on NixOS). The third-party nodes
+below are then left unlinked, and links from a previous run are removed.
+Model Downloader stays linked either way: it is this project's own node and
+provides the API endpoints below. Note that with the bundled set enabled the
+launcher deletes any real directory in `custom_nodes/` whose name matches one
+of these nodes.
+
 ### Model Downloader
 
 A non-blocking async download node with WebSocket progress updates. Download models directly within ComfyUI without blocking the UI.
@@ -153,7 +232,7 @@ A non-blocking async download node with WebSocket progress updates. Download mod
 
 ### rgthree-comfy
 
-[rgthree-comfy] (v1.0.0) - Quality of life nodes. _License: MIT_
+[rgthree-comfy] (v1.0.2607232129) - Quality of life nodes. _License: MIT_
 
 - **Reroute nodes** - Better workflow organization
 - **Context nodes** - Pass multiple values through a single connection
@@ -265,6 +344,7 @@ Add ComfyUI as a package in your system configuration:
         environment.systemPackages = [ pkgs.comfy-ui ];
         # Or for CUDA: pkgs.comfy-ui-cuda
         # Or for ROCm: pkgs.comfy-ui-rocm
+        # Or for Intel XPU: pkgs.comfy-ui-xpu
       }];
     };
 
@@ -285,9 +365,10 @@ Add ComfyUI as a package in your system configuration:
 ```nix
 { pkgs, inputs, ... }: {
   environment.systemPackages = [
-    inputs.comfyui-nix.packages.${pkgs.system}.default  # CPU
-    # inputs.comfyui-nix.packages.${pkgs.system}.cuda   # CUDA (Linux)
-    # inputs.comfyui-nix.packages.${pkgs.system}.rocm   # ROCm (Linux)
+    inputs.comfyui-nix.packages.${pkgs.stdenv.hostPlatform.system}.default  # CPU
+    # inputs.comfyui-nix.packages.${pkgs.stdenv.hostPlatform.system}.cuda   # CUDA (Linux)
+    # inputs.comfyui-nix.packages.${pkgs.stdenv.hostPlatform.system}.rocm   # ROCm (Linux)
+    # inputs.comfyui-nix.packages.${pkgs.stdenv.hostPlatform.system}.xpu    # Intel XPU (Linux)
   ];
 }
 ```
@@ -296,11 +377,12 @@ Add ComfyUI as a package in your system configuration:
 
 The overlay provides these packages:
 
-| Package              | Description                                      |
-| -------------------- | ------------------------------------------------ |
-| `pkgs.comfy-ui`      | CPU + Apple Silicon (Metal) - use this for macOS |
-| `pkgs.comfy-ui-cuda` | NVIDIA GPUs (Linux only, all architectures)      |
-| `pkgs.comfy-ui-rocm` | AMD GPUs (Linux only, `gfx1100`)      |
+| Package              | Description                                          |
+| -------------------- | ---------------------------------------------------- |
+| `pkgs.comfy-ui`      | CPU + Apple Silicon (Metal) - use this for macOS     |
+| `pkgs.comfy-ui-cuda` | NVIDIA GPUs (Linux x86_64 only, all architectures)   |
+| `pkgs.comfy-ui-rocm` | AMD GPUs (Linux x86_64 only, `gfx1100`)              |
+| `pkgs.comfy-ui-xpu`  | Intel GPUs (Linux x86_64 only, Arc + Core Ultra iGPU) |
 
 > **Note:** On macOS with Apple Silicon, the base `comfy-ui` package automatically uses Metal for GPU acceleration. No separate CUDA package is needed.
 
@@ -317,6 +399,9 @@ nix profile add github:utensils/comfyui-nix#cuda
 
 # ROCm (Linux/AMD only)
 nix profile add github:utensils/comfyui-nix#rocm
+
+# Intel XPU (Linux, Intel Arc / Core Ultra iGPU only)
+nix profile add github:utensils/comfyui-nix#xpu
 ```
 
 > **Note:** Profile installation is convenient for trying ComfyUI but isn't declarative. For reproducible setups, add the package to your NixOS/nix-darwin configuration instead.
@@ -326,14 +411,13 @@ nix profile add github:utensils/comfyui-nix#rocm
 ```nix
 {
   imports = [ comfyui-nix.nixosModules.default ];
-  nixpkgs.overlays = [ comfyui-nix.overlays.default ];
 
   services.comfyui = {
     enable = true;
     gpuSupport = "cuda";  # Enable NVIDIA GPU acceleration (recommended for most users)
     # gpuSupport = "rocm";  # Enable AMD GPU acceleration
     # cudaCapabilities = [ "8.9" ];  # Optional: optimize system CUDA packages for RTX 40xx
-    #   Note: Pre-built PyTorch wheels already support all GPU architectures
+    #   Note: Pre-built PyTorch wheels already include every supported GPU architecture
     enableManager = true;  # Enable the built-in ComfyUI Manager
     port = 8188;
     listenAddress = "127.0.0.1";  # Use "0.0.0.0" for network access
@@ -344,6 +428,20 @@ nix profile add github:utensils/comfyui-nix#rocm
   };
 }
 ```
+
+> **Note:** The module brings its own packages, so `nixpkgs.overlays` does not need
+> `comfyui-nix.overlays.default` for the service to work. Add the overlay only if you also
+> want `pkgs.comfy-ui*` available elsewhere in your configuration. Because the module never
+> defines `nixpkgs.overlays` itself, it composes with `nixpkgs.nixosModules.readOnlyPkgs`
+> (the one exception is `services.comfyui.cudaCapabilities`, which writes to
+> `nixpkgs.config`; leave it unset under `readOnlyPkgs`).
+
+> **Note:** nixpkgs ships its own `services.comfyui` module
+> (`nixos/modules/services/misc/comfyui.nix`). Importing this module automatically disables
+> the nixpkgs one, so the two no longer collide with
+> `error: The option 'services.comfyui.enable' ... is already declared`. All
+> `services.comfyui.*` options come from this flake. To use the nixpkgs service instead,
+> simply do not import `comfyui-nix.nixosModules.default`.
 
 ### Module Options
 
@@ -362,7 +460,9 @@ nix profile add github:utensils/comfyui-nix#rocm
 | `openFirewall`  | `false`              | Open the port in the firewall                    |
 | `extraArgs`     | `[]`                 | Additional CLI arguments                         |
 | `environment`   | `{}`                 | Environment variables for the service            |
+| `extraPythonPackages` | `null`          | Extra declarative Python dependencies             |
 | `customNodes`   | `{}`                 | Declarative custom nodes (see below)             |
+| `bundledCustomNodes` | `true`          | Link the bundled custom nodes into `custom_nodes/` |
 | `requiresMounts`| `[]`                 | Mount units to wait for before starting          |
 
 `cudaCapabilities` maps to `nixpkgs.config.cudaCapabilities`, so setting it will
@@ -396,11 +496,11 @@ services.comfyui = {
   enable = true;
   customNodes = {
     # Fetch from GitHub (pinned version)
-    ComfyUI-Impact-Pack = pkgs.fetchFromGitHub {
-      owner = "ltdrdata";
-      repo = "ComfyUI-Impact-Pack";
+    comfyui_controlnet_aux = pkgs.fetchFromGitHub {
+      owner = "Fannovel16";
+      repo = "comfyui_controlnet_aux";
       rev = "v1.0.0";
-      hash = "sha256-...";  # nix-prefetch-github ltdrdata ComfyUI-Impact-Pack --rev v1.0.0
+      hash = "sha256-...";  # nix-prefetch-github Fannovel16 comfyui_controlnet_aux --rev v1.0.0
     };
     # Local path (for development)
     my-node = /path/to/node;
@@ -409,6 +509,46 @@ services.comfyui = {
 ```
 
 Nodes are symlinked at service start. This is the pure Nix approach - fully reproducible and version-pinned.
+
+Pick names that do not collide with the [bundled nodes](#bundled-custom-nodes).
+The launcher relinks those on every start, so an entry named after one of them
+(`ComfyUI-Impact-Pack`, `ComfyUI-KJNodes`, ...) is overwritten before ComfyUI
+reads it. To override a bundled node with your own pin, also set
+`bundledCustomNodes = false`.
+
+Custom nodes with additional Python dependencies can extend the selected
+CPU/CUDA/ROCm/XPU runtime declaratively:
+
+```nix
+services.comfyui = {
+  customNodes.ComfyUI-Usgromana = pkgs.fetchFromGitHub {
+    owner = "DayMan84";
+    repo = "ComfyUI-Usgromana";
+    rev = "2.0.0";
+    hash = "sha256-vzb0GX3hYpER4Xqmc7bkbx5AiMDgWRyIcLapJefD71Q=";
+  };
+
+  extraPythonPackages = ps: with ps; [
+    bcrypt
+    pyjwt
+    bleach
+  ];
+};
+```
+
+`extraPythonPackages` uses the same overridden Python package set as ComfyUI,
+so GPU-specific packages such as Torch are not replaced by dependencies from a
+separate environment. Requirements files are not installed automatically: list
+each required nixpkgs package explicitly so the result remains reproducible.
+The option cannot be combined with a custom `services.comfyui.package`; include
+the dependencies directly when supplying a fully custom package.
+
+Declarative node sources are read-only. Nodes that write databases, logs, or
+configuration beneath their own source directory must support a separate
+writable data directory or be patched accordingly. Usgromana 2.0.0 writes state
+beneath its extension directory, so its Python dependencies can be declared as
+above, but the node still needs writable-state handling before it is suitable
+for a fully declarative deployment.
 
 ## Docker / Podman
 
@@ -421,12 +561,16 @@ Pre-built images on GitHub Container Registry:
 docker run -p 8188:8188 -v "$PWD/data:/data" ghcr.io/utensils/comfyui-nix:latest
 
 # CUDA (x86_64 only, requires nvidia-container-toolkit)
-# Supports ALL GPU architectures: Pascal, Volta, Turing, Ampere, Ada, Hopper, Blackwell
+# Supports Turing, Ampere, Ada, Hopper, and Blackwell
 docker run --gpus all -p 8188:8188 -v "$PWD/data:/data" ghcr.io/utensils/comfyui-nix:latest-cuda
 
 # ROCm (x86_64 only)
 # Supports `gfx1100` (and possibly others)
 docker run --gpus all -p 8188:8188 -v "$PWD/data:/data" ghcr.io/utensils/comfyui-nix:latest-rocm
+
+# Intel XPU (x86_64 only)
+# Arc A/B + Core Ultra iGPUs (Meteor Lake+). Host needs i915 or xe kernel driver.
+docker run --device /dev/dri -p 8188:8188 -v "$PWD/data:/data" ghcr.io/utensils/comfyui-nix:latest-xpu
 ```
 
 **Podman:**
@@ -440,6 +584,9 @@ podman run --device nvidia.com/gpu=all -p 8188:8188 -v "$PWD/data:/data:Z" ghcr.
 
 # ROCm
 podman run --device /dev/kfd --device /dev/dri -p 8188:8188 -v "$PWD/data:/data:rw" -v "/etc/passwd:/etc/passwd:ro" ghcr.io/utensils/comfyui-nix:latest-rocm
+
+# Intel XPU (host must have i915 or xe kernel driver + firmware)
+podman run --device /dev/dri -p 8188:8188 -v "$PWD/data:/data:Z" ghcr.io/utensils/comfyui-nix:latest-xpu
 
 ```
 
@@ -476,6 +623,7 @@ podman run \
 nix build .#dockerImage      # CPU
 nix build .#dockerImageCuda  # CUDA
 nix build .#dockerImageRocm  # ROCm
+nix build .#dockerImageXpu   # Intel XPU
 
 # Load into Docker/Podman
 docker load < result
@@ -489,6 +637,7 @@ podman load < result
 nix run .#buildDocker      # CPU
 nix run .#buildDockerCuda  # CUDA
 nix run .#buildDockerRocm  # ROCm
+nix run .#buildDockerXpu   # Intel XPU
 ```
 
 **Note:** Docker/Podman on macOS runs CPU-only. For GPU acceleration on Apple Silicon, use `nix run` directly.

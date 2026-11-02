@@ -39,6 +39,8 @@ DownloadHandler = Callable[["web.Request"], Awaitable["web.Response"]]
 _download_model_handler: DownloadHandler | None = None
 _get_download_progress_handler: DownloadHandler | None = None
 _list_downloads_handler: DownloadHandler | None = None
+_resolve_folder_handler: DownloadHandler | None = None
+_list_folders_handler: DownloadHandler | None = None
 
 try:
     spec = importlib.util.spec_from_file_location(
@@ -55,6 +57,8 @@ try:
     _download_model_handler = model_downloader_patch.download_model
     _get_download_progress_handler = model_downloader_patch.get_download_progress
     _list_downloads_handler = model_downloader_patch.list_downloads
+    _resolve_folder_handler = model_downloader_patch.resolve_folder
+    _list_folders_handler = model_downloader_patch.list_folders
 
     logger.info("Successfully imported model downloader module")
 except ImportError:
@@ -88,6 +92,24 @@ async def list_downloads(request: Any) -> Any:
     return web.json_response({"success": False, "error": "Model downloader not available"})
 
 
+async def resolve_folder(request: Any) -> Any:
+    """Resolve folder handler - delegates to loaded module or returns error."""
+    if _resolve_folder_handler is not None:
+        return await _resolve_folder_handler(request)
+    from aiohttp import web
+
+    return web.json_response({"success": False, "error": "Model downloader not available"})
+
+
+async def list_folders(request: Any) -> Any:
+    """List model folders handler - delegates to loaded module or returns error."""
+    if _list_folders_handler is not None:
+        return await _list_folders_handler(request)
+    from aiohttp import web
+
+    return web.json_response({"success": False, "error": "Model downloader not available"})
+
+
 def setup_js_api(app: Any, *args: Any, **kwargs: Any) -> Any:
     """
     Define API handler for ComfyUI extension system.
@@ -109,7 +131,13 @@ def setup_js_api(app: Any, *args: Any, **kwargs: Any) -> Any:
     logger.info("Registering model downloader API endpoints")
 
     # Define route patterns to check for
-    route_patterns = ["/api/download-model", "/api/download-progress/", "/api/downloads"]
+    route_patterns = [
+        "/model-downloader/download",
+        "/model-downloader/progress/",
+        "/model-downloader/downloads",
+        "/model-downloader/resolve-folder/",
+        "/model-downloader/folders",
+    ]
 
     # Check if any of our routes already exist
     existing_routes: set[str] = set()
@@ -121,41 +149,41 @@ def setup_js_api(app: Any, *args: Any, **kwargs: Any) -> Any:
                 logger.info("Found existing route matching %s", pattern)
 
     # Register each endpoint if it doesn't already exist
-    if "/api/download-model" not in existing_routes:
-        app.router.add_post("/api/download-model", download_model)
-        logger.info("Registered /api/download-model endpoint")
+    if "/model-downloader/download" not in existing_routes:
+        app.router.add_post("/model-downloader/download", download_model)
+        logger.info("Registered /model-downloader/download endpoint")
 
-    if "/api/download-progress/" not in existing_routes:
-        app.router.add_get("/api/download-progress/{download_id}", get_download_progress)
-        logger.info("Registered /api/download-progress endpoint")
+    if "/model-downloader/progress/" not in existing_routes:
+        app.router.add_get("/model-downloader/progress/{download_id}", get_download_progress)
+        logger.info("Registered /model-downloader/progress endpoint")
 
-    if "/api/downloads" not in existing_routes:
-        app.router.add_get("/api/downloads", list_downloads)
-        logger.info("Registered /api/downloads endpoint")
+    if "/model-downloader/downloads" not in existing_routes:
+        app.router.add_get("/model-downloader/downloads", list_downloads)
+        logger.info("Registered /model-downloader/downloads endpoint")
+
+    if "/model-downloader/resolve-folder/" not in existing_routes:
+        app.router.add_get("/model-downloader/resolve-folder/{filename}", resolve_folder)
+        logger.info("Registered /model-downloader/resolve-folder endpoint")
+
+    if "/model-downloader/folders" not in existing_routes:
+        app.router.add_get("/model-downloader/folders", list_folders)
+        logger.info("Registered /model-downloader/folders endpoint")
 
     logger.info("Model downloader API endpoints registered successfully")
     return app
 
 
-# Try to register immediately if PromptServer is available
+# Register routes immediately if PromptServer is available.
+# In ComfyUI v0.17+, setup_js_api may not be called for custom nodes,
+# so we register routes at import time as the primary mechanism.
 try:
     from server import PromptServer  # type: ignore[import-not-found]
-
-    logger.info("Attempting immediate API endpoint registration")
 
     if (
         hasattr(PromptServer, "instance")
         and PromptServer.instance is not None
         and hasattr(PromptServer.instance, "app")
     ):
-        app = PromptServer.instance.app
-        setup_js_api(app)
-    else:
-        logger.warning(
-            "PromptServer.instance not available yet, will register later via setup_js_api"
-        )
-except ImportError:
+        setup_js_api(PromptServer.instance.app)
+except (ImportError, AttributeError):
     logger.debug("PromptServer not available, will register via setup_js_api")
-except AttributeError:
-    logger.exception("Error during immediate API registration")
-    logger.debug("Will try again when ComfyUI calls setup_js_api function")

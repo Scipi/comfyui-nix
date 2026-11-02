@@ -1,11 +1,494 @@
 {
+  nixpkgs,
   pkgs,
   source,
   packages,
   pythonRuntime,
+  pythonFor,
+  vendoredPackages,
+  nixosModule,
 }:
+let
+  pythonPackages = (pythonFor "none").pkgs;
+  emptyExtendedPackage = packages.default.withExtraPythonPackages (_: [ ]);
+  duplicateCorePackage = packages.default.withExtraPythonPackages (ps: [ ps.numpy ]);
+  extendedPackage = packages.default.withExtraPythonPackages (ps: [
+    ps.bcrypt
+    ps.pyjwt
+    ps.bleach
+  ]);
+  chainedPackage =
+    (packages.default.withExtraPythonPackages (ps: [ ps.bcrypt ])).withExtraPythonPackages
+      (ps: [
+        ps.pyjwt
+        ps.bleach
+      ]);
+  backendPackages = [
+    packages.default
+  ]
+  ++ pkgs.lib.optional (packages ? cuda) packages.cuda
+  ++ pkgs.lib.optional (packages ? rocm) packages.rocm
+  ++ pkgs.lib.optional (packages ? xpu) packages.xpu;
+  backendPackagesPreserved = pkgs.lib.all (
+    package:
+    let
+      extended = package.withExtraPythonPackages (ps: [ ps.bcrypt ]);
+    in
+    package.pythonRuntime.pkgs.torch.outPath == extended.pythonRuntime.pkgs.torch.outPath
+    && package.pythonRuntime.pkgs.numpy.outPath == extended.pythonRuntime.pkgs.numpy.outPath
+  ) backendPackages;
+  evalModule =
+    serviceConfig:
+    nixpkgs.lib.nixosSystem {
+      system = pkgs.stdenv.hostPlatform.system;
+      modules = [
+        nixosModule
+        {
+          system.stateVersion = "26.05";
+          services.comfyui = {
+            enable = true;
+          }
+          // serviceConfig;
+        }
+      ];
+    };
+  # Regression guard for the nixpkgs namespace clash: nixpkgs ships its own
+  # nixos/modules/services/misc/comfyui.nix declaring `services.comfyui.enable`,
+  # which collides with this module unless it is disabled. The stub below claims the
+  # upstream module key so the conflict is reproducible against any nixpkgs revision,
+  # including ones predating the upstream module.
+  upstreamModuleStub =
+    {
+      modulesPath,
+      lib,
+      ...
+    }:
+    {
+      imports = [
+        {
+          key = "${modulesPath}/services/misc/comfyui.nix";
+          options.services.comfyui.enable = lib.mkEnableOption "ComfyUI (nixpkgs)";
+        }
+      ];
+    };
+  namespaceSystem = nixpkgs.lib.nixosSystem {
+    system = pkgs.stdenv.hostPlatform.system;
+    modules = [
+      nixosModule
+      upstreamModuleStub
+      { system.stateVersion = "26.05"; }
+    ];
+  };
+  namespaceDeclarations = namespaceSystem.options.services.comfyui.enable.declarations;
+  upstreamModuleDisabled =
+    pkgs.lib.length namespaceDeclarations == 1
+    && pkgs.lib.hasSuffix "nix/modules/comfyui.nix" (pkgs.lib.head namespaceDeclarations);
+  # Regression guard for issue #101: the module must not define `nixpkgs.overlays`
+  # (or any other option `nixpkgs.nixosModules.readOnlyPkgs` marks read-only), and
+  # must still resolve its package without the overlay being applied.
+  readOnlyPkgsSystem = nixpkgs.lib.nixosSystem {
+    modules = [
+      nixpkgs.nixosModules.readOnlyPkgs
+      nixosModule
+      {
+        nixpkgs.pkgs = pkgs;
+        system.stateVersion = "26.05";
+        services.comfyui.enable = true;
+      }
+    ];
+  };
+  readOnlyPkgsExecStart = readOnlyPkgsSystem.config.systemd.services.comfyui.serviceConfig.ExecStart;
+
+  defaultModuleSystem = evalModule { };
+  moduleSystem = evalModule {
+    extraPythonPackages = ps: [
+      ps.bcrypt
+      ps.pyjwt
+      ps.bleach
+    ];
+  };
+  unsupportedPackageSystem = evalModule {
+    package = packages.default.overrideAttrs (_: {
+      pname = "custom-comfy-ui";
+    });
+    extraPythonPackages = ps: [ ps.bcrypt ];
+  };
+  unsupportedPackageRejected = pkgs.lib.any (
+    assertion:
+    !assertion.assertion && pkgs.lib.hasInfix "cannot be combined with a custom" assertion.message
+  ) unsupportedPackageSystem.config.assertions;
+  backendModuleSpecs = [
+    {
+      gpuSupport = "none";
+      package = packages.default;
+    }
+  ]
+  ++ pkgs.lib.optional (packages ? cuda) {
+    gpuSupport = "cuda";
+    package = packages.cuda;
+  }
+  ++ pkgs.lib.optional (packages ? rocm) {
+    gpuSupport = "rocm";
+    package = packages.rocm;
+  }
+  ++ pkgs.lib.optional (packages ? xpu) {
+    gpuSupport = "xpu";
+    package = packages.xpu;
+  };
+  backendModulesPreserved = pkgs.lib.all (
+    spec:
+    let
+      system = evalModule {
+        inherit (spec) gpuSupport;
+        extraPythonPackages = ps: [ ps.bcrypt ];
+      };
+      expected = spec.package.withExtraPythonPackages (ps: [ ps.bcrypt ]);
+      execStart = system.config.systemd.services.comfyui.serviceConfig.ExecStart;
+    in
+    pkgs.lib.hasPrefix expected.outPath execStart
+  ) backendModuleSpecs;
+  defaultModuleExecStart =
+    defaultModuleSystem.config.systemd.services.comfyui.serviceConfig.ExecStart;
+  moduleExecStart = moduleSystem.config.systemd.services.comfyui.serviceConfig.ExecStart;
+  mkExtraPythonPackagesCheck =
+    {
+      name,
+      package,
+      expectedCudaVersion ? null,
+    }:
+    let
+      extended = package.withExtraPythonPackages (ps: [
+        ps.bcrypt
+        ps.pyjwt
+        ps.bleach
+      ]);
+      expectedCudaSuffix =
+        if expectedCudaVersion == null then
+          null
+        else
+          "cu${pkgs.lib.replaceStrings [ "." ] [ "" ] expectedCudaVersion}";
+    in
+    assert package.pythonRuntime.pkgs.torch.outPath == extended.pythonRuntime.pkgs.torch.outPath;
+    assert package.pythonRuntime.pkgs.numpy.outPath == extended.pythonRuntime.pkgs.numpy.outPath;
+    pkgs.runCommand name
+      {
+        nativeBuildInputs = [ extended.pythonRuntime ];
+      }
+      ''
+        ${extended.pythonRuntime}/bin/python - <<'PY'
+        import aiohttp
+        import bcrypt
+        import bleach
+        import jwt
+        import numpy
+        import torch
+
+        assert aiohttp.__version__
+        assert bcrypt.__version__
+        assert bleach.__version__
+        assert jwt.__version__
+        assert numpy.__version__
+        assert torch.__version__
+        ${pkgs.lib.optionalString (expectedCudaVersion != null) ''
+          assert torch.__version__.endswith("+${expectedCudaSuffix}")
+          assert torch.version.cuda == "${expectedCudaVersion}"
+        ''}
+        PY
+        touch $out
+      '';
+  mssRuntimeDeps =
+    assert !pythonPackages.mss.doInstallCheck;
+    pythonPackages.mss;
+  # Every backend's torch comes from a pre-built wheel whose metadata names
+  # distributions nixpkgs supplies outside PyPI. Those requirements are dropped
+  # from the installed metadata (or waved through with dontCheckRuntimeDeps),
+  # so assert on the installed result instead of trusting the hook.
+  #
+  # The interpreter must come from `pythonFor <backend>`: `pythonRuntime.pkgs`
+  # is the unoverridden nixpkgs package set and yields the stock CPU torch,
+  # which would make every assertion below pass vacuously.
+  mkTorchRuntimeDeps =
+    {
+      backend,
+      removedRequirements,
+    }:
+    let
+      torchPython = (pythonFor backend).withPackages (ps: [ ps.torch ]);
+      removedTuple = pkgs.lib.concatMapStrings (r: ''"${r}", '') removedRequirements;
+    in
+    pkgs.runCommand "${backend}-torch-runtime-deps" { nativeBuildInputs = [ torchPython ]; } ''
+      ${torchPython}/bin/python - <<'PY'
+      import importlib.metadata
+
+      import setuptools
+      import torch
+
+      requirements = importlib.metadata.requires("torch") or []
+      removed_requirements = (${removedTuple})
+
+      assert not any(
+          requirement.startswith(removed_requirements) for requirement in requirements
+      )
+      assert setuptools.__version__
+      assert torch.__version__
+      assert "${expectedTorchVersions.${backend}}" in torch.__version__, torch.__version__
+      PY
+      touch $out
+    '';
+  # Guards against the check silently falling back to nixpkgs' CPU torch again.
+  expectedTorchVersions = {
+    cuda = "+cu";
+    rocm = "+rocm";
+    xpu = "+xpu";
+  };
+  torchRuntimeDepsChecks =
+    pkgs.lib.optionalAttrs (packages ? cuda) {
+      cuda-torch-runtime-deps = mkTorchRuntimeDeps {
+        backend = "cuda";
+        removedRequirements = [
+          "cuda-bindings"
+          "nvidia-"
+          "triton"
+        ];
+      };
+    }
+    // pkgs.lib.optionalAttrs (packages ? rocm) {
+      rocm-torch-runtime-deps = mkTorchRuntimeDeps {
+        backend = "rocm";
+        removedRequirements = [ "triton-rocm" ];
+      };
+    }
+    // pkgs.lib.optionalAttrs (packages ? xpu) {
+      # The XPU wheel keeps its Intel requirements; dontCheckRuntimeDeps waves
+      # them through because the pip names do not match the Nix providers.
+      xpu-torch-runtime-deps = mkTorchRuntimeDeps {
+        backend = "xpu";
+        removedRequirements = [ ];
+      };
+    };
+  # Wheel packages only. The torch checks stay out of this aggregate so a
+  # single CI job never has to realize three multi-gigabyte GPU closures.
+  runtimeDepsPackages = {
+    facexlib = pythonPackages.facexlib;
+    manager = vendoredPackages.comfyuiManager;
+    mss = mssRuntimeDeps;
+  };
+  runtimeDepsChecks = pkgs.lib.mapAttrs' (
+    name: package: pkgs.lib.nameValuePair "${name}-runtime-deps" package
+  ) runtimeDepsPackages;
+in
 {
   package = packages.default;
+  python-runtime-deps = pkgs.linkFarm "python-runtime-deps" (
+    pkgs.lib.mapAttrsToList (name: path: { inherit name path; }) runtimeDepsPackages
+  );
+}
+//
+  pkgs.lib.optionalAttrs (pkgs.stdenv.hostPlatform.isDarwin && pkgs.stdenv.hostPlatform.isAarch64)
+    {
+      darwin-torch-import-order =
+        let
+          python = (pythonFor "none").withPackages (ps: [
+            ps.torch
+            ps.opencv-python
+          ]);
+        in
+        pkgs.runCommand "darwin-torch-import-order" { } ''
+          # Separate processes expose OpenMP initialization in either import order.
+          for first in cv2 torch; do
+            ${python}/bin/python - "$first" <<'PY'
+          import importlib
+          import sys
+          first = sys.argv[1]
+          importlib.import_module(first)
+          importlib.import_module("torch" if first == "cv2" else "cv2")
+          import torch
+          matrix = torch.arange(256 * 256, dtype=torch.float32).reshape(256, 256)
+          torch.testing.assert_close(matrix @ torch.eye(256), matrix)
+          PY
+          done
+          touch $out
+        '';
+
+      darwin-torch-shared-memory =
+        let
+          python = (pythonFor "none").withPackages (ps: [ ps.torch ]);
+        in
+        pkgs.runCommand "darwin-torch-shared-memory" { } ''
+          cat > shared-memory.py <<'PY'
+          import gc
+          import multiprocessing as mp
+          from multiprocessing import resource_tracker
+          import torch
+
+          def worker(queue):
+              queue.put(torch.ones(4).share_memory_())
+
+          if __name__ == "__main__":
+              ctx = mp.get_context("spawn")
+              queue = ctx.Queue()
+              child = ctx.Process(target=worker, args=(queue,))
+              child.start()
+              tensor = queue.get(timeout=20)
+              child.join(timeout=20)
+              assert child.exitcode == 0
+              queue.close()
+              queue.join_thread()
+              del queue
+              gc.collect()
+              torch.testing.assert_close(tensor, torch.ones(4))
+              # Retain the tensor's manager socket while Python stops its tracker,
+              # reproducing the interpreter-finalization order that hung timm.
+              resource_tracker._resource_tracker._stop()
+          PY
+          ${python}/bin/python - <<'PY'
+          import subprocess
+          import sys
+          subprocess.run([sys.executable, "shared-memory.py"], check=True, timeout=30)
+          PY
+          touch $out
+        '';
+    }
+// runtimeDepsChecks
+// torchRuntimeDepsChecks
+//
+  pkgs.lib.optionalAttrs
+    (
+      pkgs.stdenv.hostPlatform.isDarwin
+      || (pkgs.stdenv.hostPlatform.isLinux && pkgs.stdenv.hostPlatform.isx86_64)
+    )
+    {
+      comfy-extras-imports =
+        pkgs.runCommand "comfy-extras-imports"
+          {
+            nativeBuildInputs = [ pythonRuntime ];
+          }
+          ''
+            test -f ${packages.default.customNodes.rgthree-comfy}/web/comfyui/label.js
+            grep -q 'name: "rgthree.Label"' \
+              ${packages.default.customNodes.rgthree-comfy}/web/comfyui/label.js
+
+            PYTHONPATH=${packages.default.comfyuiSrc} ${pythonRuntime}/bin/python - <<'PY'
+            import importlib.util
+            import sys
+
+            import kornia
+            import kornia_rs
+            import comfy_extras.nodes_post_processing
+            import comfy_extras.nodes_latent
+            import comfy_extras.nodes_canny
+            import comfy_extras.nodes_morphology
+
+            assert kornia.__version__
+            assert kornia_rs.__file__
+
+            ltxvideo_path = "${packages.default.customNodes.ltxvideo}"
+            spec = importlib.util.spec_from_file_location(
+                "comfyui_ltxvideo",
+                f"{ltxvideo_path}/__init__.py",
+                submodule_search_locations=[ltxvideo_path],
+            )
+            assert spec and spec.loader
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[spec.name] = module
+            spec.loader.exec_module(module)
+            assert module.NODE_CLASS_MAPPINGS
+            PY
+            touch $out
+          '';
+    }
+# XPU build-only check (Linux x86_64 only).
+# The project maintainer has no Intel GPU, so runtime testing relies on external
+# contributors. This check at least verifies the wheel patching and closure build
+# succeed, catching the most common regression class (missing runtime libs,
+# broken overlay, upstream wheel metadata changes).
+// pkgs.lib.optionalAttrs (packages ? xpu) {
+  package-xpu = packages.xpu;
+}
+// pkgs.lib.optionalAttrs (packages ? cuda) {
+  extra-python-packages-cuda = mkExtraPythonPackagesCheck {
+    name = "extra-python-packages-cuda";
+    package = packages.cuda;
+    expectedCudaVersion = "13.0";
+  };
+}
+// pkgs.lib.optionalAttrs (packages ? rocm) {
+  extra-python-packages-rocm = mkExtraPythonPackagesCheck {
+    name = "extra-python-packages-rocm";
+    package = packages.rocm;
+  };
+}
+// pkgs.lib.optionalAttrs (packages ? xpu) {
+  extra-python-packages-xpu = mkExtraPythonPackagesCheck {
+    name = "extra-python-packages-xpu";
+    package = packages.xpu;
+  };
+}
+// {
+
+  extra-python-packages =
+    assert emptyExtendedPackage.outPath == packages.default.outPath;
+    assert emptyExtendedPackage.pythonRuntime.outPath == pythonRuntime.outPath;
+    assert duplicateCorePackage.pythonRuntime.outPath == pythonRuntime.outPath;
+    assert backendPackagesPreserved;
+    assert pkgs.lib.hasPrefix packages.default.outPath defaultModuleExecStart;
+    assert pkgs.lib.hasPrefix extendedPackage.outPath moduleExecStart;
+    assert unsupportedPackageRejected;
+    assert backendModulesPreserved;
+    pkgs.runCommand "extra-python-packages"
+      {
+        nativeBuildInputs = [ chainedPackage.pythonRuntime ];
+      }
+      ''
+        ${chainedPackage.pythonRuntime}/bin/python - <<'PY'
+        import aiohttp
+        import bcrypt
+        import bleach
+        import jwt
+        import numpy
+        import torch
+
+        assert aiohttp.__version__
+        assert bcrypt.__version__
+        assert bleach.__version__
+        assert jwt.__version__
+        assert numpy.__version__
+        assert torch.__version__
+        PY
+        touch $out
+      '';
+
+  extra-python-packages-runtime = mkExtraPythonPackagesCheck {
+    name = "extra-python-packages-runtime";
+    package = packages.default;
+  };
+
+  nixos-module-namespace =
+    assert upstreamModuleDisabled;
+    pkgs.runCommand "nixos-module-namespace" { } "touch $out";
+
+  nixos-module-read-only-pkgs =
+    assert pkgs.lib.hasPrefix packages.default.outPath readOnlyPkgsExecStart;
+    pkgs.runCommand "nixos-module-read-only-pkgs" { } "touch $out";
+
+  pytest =
+    let
+      pytestPython = pkgs.python3.withPackages (ps: [ ps.pytest ]);
+    in
+    pkgs.runCommand "pytest"
+      {
+        nativeBuildInputs = [ pytestPython ];
+        src = source;
+      }
+      ''
+        cp -r $src source
+        chmod -R u+w source
+        cd source
+        PYTHONPATH=src/custom_nodes/model_downloader \
+          ${pytestPython}/bin/pytest \
+          src/custom_nodes/model_downloader/test_model_downloader.py -v
+        touch $out
+      '';
 
   ruff-check =
     pkgs.runCommand "ruff-check"
@@ -41,7 +524,7 @@
     pkgs.runCommand "nixfmt-check"
       {
         nativeBuildInputs = [
-          pkgs.nixfmt-rfc-style
+          pkgs.nixfmt
           pkgs.findutils
         ];
         src = source;

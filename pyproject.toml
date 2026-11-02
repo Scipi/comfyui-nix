@@ -82,6 +82,13 @@ ignore = [
 "__init__.py" = ["F401", "F403"]
 # Allow star imports in custom node modules (ComfyUI convention)
 "src/custom_nodes/**/*.py" = ["F403", "F405"]
+# Model downloader test: relax rules for test patterns
+"src/custom_nodes/model_downloader/test_*.py" = [
+    "SLF001",  # Private member access in tests (testing internal functions)
+    "PLR2004", # Magic values in assertions are fine in tests
+    "S101",    # Assert is expected in tests
+    "ERA001",  # Section separator comments look like commented-out code
+]
 # Model downloader: Allow module loading errors and complex download logic
 "src/custom_nodes/model_downloader/__init__.py" = [
     "TRY301",   # Inline raise acceptable for module loading errors
@@ -93,6 +100,8 @@ ignore = [
     "TRY002",   # Generic Exception acceptable for HTTP errors
     "TRY301",   # Inline raise acceptable for HTTP error handling
     "ASYNC230", # Blocking file I/O acceptable (aiofiles would be extra dependency)
+    "ASYNC240", # Blocking os.path stat calls acceptable; the suggested trio/anyio
+                # Path migration conflicts with the global "PTH" ignore above
 ]
 # Persistence: Allow complex setup function (would need architectural refactoring)
 "src/persistence/persistence.py" = [
@@ -149,6 +158,7 @@ exclude = [
     "venv",
     "build",
     "dist",
+    "**/test_*.py",
 ]
 
 # Type checking mode
